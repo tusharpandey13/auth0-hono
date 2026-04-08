@@ -27,7 +27,10 @@ export const ConfigurationSchema = z
     sessionStore: z.instanceof(SessionStore).optional(),
     session: z.object({
       store: z.any().optional(),
-      secret: z.string().min(32),
+      secret: z.union([
+        z.string().min(32),
+        z.array(z.string().min(32)).min(1),
+      ]),
       rolling: z.boolean().optional().default(true),
       absoluteDuration: z
         .number()

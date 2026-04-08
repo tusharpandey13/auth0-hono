@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Context } from "hono";
-import { HTTPException } from "hono/http-exception";
 import { afterEach, beforeEach, describe, expect, it, Mock, vi } from "vitest";
 import { getClient } from "../../src/config/index.js";
 import { backchannelLogout } from "../../src/middleware/backchannelLogout.js";
+import { Auth0Error } from "../../src/errors/Auth0Error.js";
 
 // Mock dependencies
 vi.mock("../../src/config/index.js", () => ({
@@ -87,11 +87,15 @@ describe("backchannelLogout middleware", () => {
 
     it("should throw a 400 error with appropriate message", async () => {
       await expect(backchannelLogout()(mockContext, nextFn)).rejects.toThrow(
-        new HTTPException(400, {
-          message:
-            "Invalid content type. Expected 'application/x-www-form-urlencoded'.",
-        }),
+        Auth0Error,
       );
+
+      try {
+        await backchannelLogout()(mockContext, nextFn);
+      } catch (error) {
+        expect((error as Auth0Error).status).toBe(400);
+        expect((error as Auth0Error).code).toBe('invalid_request');
+      }
     });
   });
 
@@ -103,11 +107,15 @@ describe("backchannelLogout middleware", () => {
 
     it("should throw a 400 error with appropriate message", async () => {
       await expect(backchannelLogout()(mockContext, nextFn)).rejects.toThrow(
-        new HTTPException(400, {
-          message:
-            "Invalid content type. Expected 'application/x-www-form-urlencoded'.",
-        }),
+        Auth0Error,
       );
+
+      try {
+        await backchannelLogout()(mockContext, nextFn);
+      } catch (error) {
+        expect((error as Auth0Error).status).toBe(400);
+        expect((error as Auth0Error).code).toBe('invalid_request');
+      }
     });
   });
 
@@ -119,10 +127,15 @@ describe("backchannelLogout middleware", () => {
 
     it("should throw a 400 error with appropriate message", async () => {
       await expect(backchannelLogout()(mockContext, nextFn)).rejects.toThrow(
-        new HTTPException(400, {
-          message: "Missing `logout_token` in the request body.",
-        }),
+        Auth0Error,
       );
+
+      try {
+        await backchannelLogout()(mockContext, nextFn);
+      } catch (error) {
+        expect((error as Auth0Error).status).toBe(400);
+        expect((error as Auth0Error).code).toBe('invalid_request');
+      }
     });
   });
 
@@ -136,10 +149,15 @@ describe("backchannelLogout middleware", () => {
 
     it("should throw a 400 error with appropriate message", async () => {
       await expect(backchannelLogout()(mockContext, nextFn)).rejects.toThrow(
-        new HTTPException(400, {
-          message: "Missing `logout_token` in the request body.",
-        }),
+        Auth0Error,
       );
+
+      try {
+        await backchannelLogout()(mockContext, nextFn);
+      } catch (error) {
+        expect((error as Auth0Error).status).toBe(400);
+        expect((error as Auth0Error).code).toBe('invalid_request');
+      }
     });
   });
 
@@ -147,18 +165,26 @@ describe("backchannelLogout middleware", () => {
     const errorMessage = "Invalid logout token";
 
     beforeEach(() => {
-      // Override the handleBackchannelLogout mock to throw an error
+      // Override the handleBackchannelLogout mock to throw a server-js error
+      // server-js throws errors with a `code` property
+      const serverError = Object.assign(new Error(errorMessage), {
+        code: "backchannel_logout_error",
+      });
       mockClient.handleBackchannelLogout = vi
         .fn()
-        .mockRejectedValue(new Error(errorMessage));
+        .mockRejectedValue(serverError);
     });
 
-    it("should throw a 400 error with the error message", async () => {
+    it("should throw a mapped Auth0Error via mapServerError", async () => {
       await expect(backchannelLogout()(mockContext, nextFn)).rejects.toThrow(
-        new HTTPException(400, {
-          message: errorMessage,
-        }),
+        Auth0Error,
       );
+      await expect(
+        backchannelLogout()(mockContext, nextFn),
+      ).rejects.toMatchObject({
+        status: 400,
+        code: "backchannel_logout_error",
+      });
     });
   });
 });

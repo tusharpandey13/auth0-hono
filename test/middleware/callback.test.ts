@@ -35,6 +35,7 @@ describe("callback middleware", () => {
     // Create a mock client
     mockClient = {
       completeInteractiveLogin: vi.fn(),
+      getSession: vi.fn().mockResolvedValue(null),
     };
 
     // Create a mock Hono context

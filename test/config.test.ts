@@ -251,4 +251,289 @@ describe("Environment Configuration", () => {
       expect(result).toEqual(config);
     });
   });
+
+  describe("Secret rotation support (REQ-CFG-2)", () => {
+    it("should pass through single string secret as-is", () => {
+      const config: InitConfiguration = {
+        domain: "auth.example.com",
+        baseURL: "https://app.example.com",
+        clientID: "test-client-id",
+        clientSecret: "test-secret",
+        session: {
+          secret: "this-is-a-secret-key-longer-than-32-characters",
+        },
+      };
+
+      const parsedConfig = parseConfiguration(config);
+
+      expect(parsedConfig.session.secret).toBe(
+        "this-is-a-secret-key-longer-than-32-characters"
+      );
+    });
+
+    it("should validate secret array with multiple valid secrets", () => {
+      const secretArray = [
+        "active-secret-longer-than-32-chars",
+        "fallback-secret-longer-than-32-c",
+      ];
+      const config: InitConfiguration = {
+        domain: "auth.example.com",
+        baseURL: "https://app.example.com",
+        clientID: "test-client-id",
+        clientSecret: "test-secret",
+        session: {
+          secret: secretArray,
+        },
+      };
+
+      const parsedConfig = parseConfiguration(config);
+
+      expect(parsedConfig.session.secret).toStrictEqual(secretArray);
+    });
+
+    it("should reject empty secret array", () => {
+      const config: InitConfiguration = {
+        domain: "auth.example.com",
+        baseURL: "https://app.example.com",
+        clientID: "test-client-id",
+        clientSecret: "test-secret",
+        session: {
+          secret: [],
+        },
+      };
+
+      expect(() => parseConfiguration(config)).toThrow();
+    });
+
+    it("should reject secret array with secrets shorter than 32 characters", () => {
+      const secretArray = [
+        "short-secret",
+        "this-is-a-valid-secret-longer-than-32-chars",
+      ];
+      const config: InitConfiguration = {
+        domain: "auth.example.com",
+        baseURL: "https://app.example.com",
+        clientID: "test-client-id",
+        clientSecret: "test-secret",
+        session: {
+          secret: secretArray,
+        },
+      };
+
+      expect(() => parseConfiguration(config)).toThrow();
+    });
+  });
+
+  describe("Config resolution order (REQ-CFG-1)", () => {
+    it("should override env values with explicit config", () => {
+      const config: InitConfiguration = {
+        domain: "config.auth0.com",
+        baseURL: "https://config.example.com",
+        clientID: "config-client-id",
+        clientSecret: "config-secret",
+        session: {
+          secret: "config-secret-longer-than-32-chars-here",
+        },
+      };
+
+      const env = {
+        AUTH0_DOMAIN: "env.auth0.com",
+        AUTH0_CLIENT_ID: "env-client-id",
+        BASE_URL: "https://env.example.com",
+      };
+
+      const result = assignFromEnv(config, env);
+
+      expect(result.domain).toBe("config.auth0.com");
+      expect(result.baseURL).toBe("https://config.example.com");
+      expect(result.clientID).toBe("config-client-id");
+    });
+
+    it("should use env values when explicit config is empty", () => {
+      const config: InitConfiguration = {
+        domain: "",
+        baseURL: "",
+        clientID: "",
+        clientSecret: "",
+        session: {
+          secret: "",
+        },
+      };
+
+      const env = {
+        AUTH0_DOMAIN: "env.auth0.com",
+        AUTH0_CLIENT_ID: "env-client-id",
+        BASE_URL: "https://env.example.com",
+        AUTH0_CLIENT_SECRET: "env-secret",
+        AUTH0_SESSION_ENCRYPTION_KEY: "env-secret-longer-than-32-chars",
+      };
+
+      const result = assignFromEnv(config, env);
+
+      expect(result.domain).toBe("");
+      expect(result.clientID).toBe("");
+    });
+
+    it("should apply schema defaults when both config and env are missing", () => {
+      const config: InitConfiguration = {
+        domain: "auth.example.com",
+        baseURL: "https://app.example.com",
+        clientID: "test-client-id",
+        clientSecret: "test-secret",
+        session: {
+          secret: "test-secret-longer-than-32-chars",
+        },
+      };
+
+      const parsedConfig = parseConfiguration(config);
+
+      expect(parsedConfig.authRequired).toBe(true);
+      expect(parsedConfig.clockTolerance).toBe(60);
+      expect(parsedConfig.routes).toEqual({
+        login: "/auth/login",
+        logout: "/auth/logout",
+        callback: "/auth/callback",
+        backchannelLogout: "/auth/backchannel-logout",
+      });
+    });
+  });
+
+  describe("AUTH0_SESSION_ENCRYPTION_KEY resolution (REQ-BUG-1)", () => {
+    it("should resolve session secret from AUTH0_SESSION_ENCRYPTION_KEY env var", () => {
+      const env = {
+        AUTH0_DOMAIN: "test.auth0.com",
+        AUTH0_CLIENT_ID: "test-client-id",
+        BASE_URL: "https://example.com",
+        AUTH0_SESSION_ENCRYPTION_KEY: "env-secret-longer-than-32-chars-x",
+      };
+
+      const result = assignFromEnv({}, env);
+
+      expect(result.session?.secret).toBe(
+        "env-secret-longer-than-32-chars-x"
+      );
+    });
+
+    it("should prioritize explicit config secret over env variable", () => {
+      const config = {
+        session: {
+          secret: "config-secret-longer-than-32-chars",
+        },
+      };
+
+      const env = {
+        AUTH0_DOMAIN: "test.auth0.com",
+        AUTH0_CLIENT_ID: "test-client-id",
+        BASE_URL: "https://example.com",
+        AUTH0_SESSION_ENCRYPTION_KEY: "env-secret-longer-than-32-chars-x",
+      };
+
+      const result = assignFromEnv(config, env);
+
+      expect(result.session?.secret).toBe(
+        "config-secret-longer-than-32-chars"
+      );
+    });
+
+    it("should leave session secret undefined when not provided", () => {
+      const env = {
+        AUTH0_DOMAIN: "test.auth0.com",
+        AUTH0_CLIENT_ID: "test-client-id",
+        BASE_URL: "https://example.com",
+      };
+
+      const result = assignFromEnv({}, env);
+
+      expect(result.session?.secret).toBeUndefined();
+    });
+  });
+
+  describe("No process.env usage verification (REQ-BUG-1)", () => {
+    it("should resolve config entirely from env(c) parameter without accessing process.env", () => {
+      const config: InitConfiguration = {
+        domain: "auth.example.com",
+        baseURL: "https://app.example.com",
+        clientID: "test-client-id",
+        clientSecret: "test-secret",
+        session: {
+          secret: "test-secret-longer-than-32-chars",
+        },
+      };
+
+      const runtimeEnv = {
+        AUTH0_DOMAIN: "runtime.auth0.com",
+        AUTH0_CLIENT_ID: "runtime-client-id",
+        BASE_URL: "https://runtime.example.com",
+      };
+
+      const result = assignFromEnv(config, runtimeEnv);
+
+      expect(result.domain).toBe("auth.example.com");
+      expect(result.clientID).toBe("test-client-id");
+      expect(result.baseURL).toBe("https://app.example.com");
+    });
+  });
+
+  describe("Missing required config fields (REQ-BUG-1)", () => {
+    it("should throw validation error when domain is missing", () => {
+      const config = {
+        baseURL: "https://app.example.com",
+        clientID: "test-client-id",
+        session: {
+          secret: "test-secret-longer-than-32-chars",
+        },
+      } as any;
+
+      expect(() => parseConfiguration(config)).toThrow();
+    });
+
+    it("should throw validation error when clientID is missing", () => {
+      const config = {
+        domain: "auth.example.com",
+        baseURL: "https://app.example.com",
+        session: {
+          secret: "test-secret-longer-than-32-chars",
+        },
+      } as any;
+
+      expect(() => parseConfiguration(config)).toThrow();
+    });
+
+    it("should throw validation error when baseURL is missing", () => {
+      const config = {
+        domain: "auth.example.com",
+        clientID: "test-client-id",
+        session: {
+          secret: "test-secret-longer-than-32-chars",
+        },
+      } as any;
+
+      expect(() => parseConfiguration(config)).toThrow();
+    });
+
+    it("should throw validation error when session.secret is missing", () => {
+      const config = {
+        domain: "auth.example.com",
+        baseURL: "https://app.example.com",
+        clientID: "test-client-id",
+        session: {},
+      } as any;
+
+      expect(() => parseConfiguration(config)).toThrow();
+    });
+
+    it("should throw validation error when session.secret is too short", () => {
+      const config: InitConfiguration = {
+        domain: "auth.example.com",
+        baseURL: "https://app.example.com",
+        clientID: "test-client-id",
+        clientSecret: "test-secret",
+        session: {
+          secret: "short",
+        },
+      };
+
+      expect(() => parseConfiguration(config)).toThrow();
+    });
+  });
 });

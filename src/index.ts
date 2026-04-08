@@ -1,19 +1,74 @@
-export { auth } from "@/auth.js";
+// Main auth0 middleware
+export { auth0 } from '@/auth.js'
+/**
+ * @deprecated Use auth0() instead.
+ */
+export { auth } from '@/auth.js'
 
-export type { OIDCEnv, OIDCVariables } from "@/lib/honoEnv.js";
-export { type UserInfoResponse as UserInfo } from "openid-client";
+// Route handlers (standalone)
+export {
+  handleLogin,
+  handleLogout,
+  handleCallback,
+  handleBackchannelLogout,
+} from '@/middleware/index.js'
 
+// Protection middleware
+export { requiresAuth } from '@/middleware/index.js'
+export { requiresOrg } from '@/middleware/index.js'
+
+// Authorization middleware
+export { claimEquals } from '@/middleware/index.js'
+export { claimIncludes } from '@/middleware/index.js'
+export { claimCheck } from '@/middleware/index.js'
+
+// Silent login
 export {
   attemptSilentLogin,
-  backchannelLogout,
-  callback,
-  login,
-  logout,
-  pauseSilentLogin,
-  requiresAuth,
+  cancelSilentLogin,
   resumeSilentLogin,
-} from "@/middleware/index.js";
+} from '@/middleware/index.js'
+/**
+ * @deprecated Use cancelSilentLogin instead.
+ */
+export { pauseSilentLogin } from '@/middleware/silentLogin.js'
 
-export type { TokenEndpointResponse as TokenSet } from "openid-client";
+// Helpers
+export { getSession } from '@/helpers/getSession.js'
+export { getUser } from '@/helpers/getUser.js'
+export { getAccessToken } from '@/helpers/getAccessToken.js'
+export type { Auth0TokenSet, GetAccessTokenOptions } from '@/helpers/getAccessToken.js'
+export { getAccessTokenForConnection } from '@/helpers/getAccessTokenForConnection.js'
+export type { GetAccessTokenForConnectionOptions } from '@/helpers/getAccessTokenForConnection.js'
+export { updateSession } from '@/helpers/updateSession.js'
 
-export { Auth0Exception } from "@/lib/Exception.js";
+// Utilities
+export { toSafeRedirect } from '@/utils/util.js'
+
+// Errors
+export { Auth0Error } from '@/errors/Auth0Error.js'
+export {
+  AccessDeniedError,
+  LoginRequiredError,
+  InvalidGrantError,
+  MissingSessionError,
+  MissingTransactionError,
+  TokenRefreshError,
+  ConnectionTokenError,
+} from '@/errors/errors.js'
+/**
+ * @deprecated Use Auth0Error instead.
+ */
+export { Auth0Exception } from '@/errors/index.js'
+
+// Types
+export type {
+  Auth0Context,
+  Auth0User,
+  Auth0Organization,
+  Auth0Session,
+} from '@/types/auth0.js'
+export type { OIDCEnv, OIDCVariables } from '@/lib/honoEnv.js'
+export { SessionStore } from '@/types/session.js'
+export { type UserInfoResponse as UserInfo } from 'openid-client'
+export type { TokenEndpointResponse as TokenSet } from 'openid-client'

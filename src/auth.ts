@@ -1,107 +1,170 @@
-import { assignFromEnv, parseConfiguration } from "@/config/index.js";
-import { initializeOidcClient } from "@/lib/client.js";
-import { OIDCEnv } from "@/lib/honoEnv.js";
+import { env } from 'hono/adapter'
+import { MiddlewareHandler, Next } from 'hono'
+import { every } from 'hono/combine'
+import { createMiddleware } from 'hono/factory'
+
+import { assignFromEnv, parseConfiguration } from '@/config/index.js'
+import { initializeOidcClient, Auth0ClientBundle } from '@/lib/client.js'
+import { OIDCEnv } from '@/lib/honoEnv.js'
+import { HonoCookieHandler } from '@/session/HonoCookieHandler.js'
 import {
   backchannelLogout as backchannelLogoutHandler,
   callback as callbackHandler,
   login as loginHandler,
   logout as logoutHandler,
   requiresAuth,
-} from "@/middleware/index.js";
-import { ServerClient } from "@auth0/auth0-server-js";
-import { Context, MiddlewareHandler, Next } from "hono";
-import { every } from "hono/combine";
-import { createMiddleware } from "hono/factory";
-import { Configuration } from "./config/Configuration.js";
-import { PartialConfig } from "./config/envConfig.js";
-import { HonoCookieHandler } from "./session/HonoCookieHandler.js";
+} from '@/middleware/index.js'
+import { getCachedSession } from '@/helpers/sessionCache.js'
+import { Auth0Context, Auth0User, Auth0Organization, Auth0Session } from '@/types/auth0.js'
+import { mapServerError } from '@/errors/errorMap.js'
+import { STATE_STORE_KEY, SESSION_CACHE_KEY } from '@/lib/constants.js'
+import { PartialConfig } from '@/config/envConfig.js'
+import { Configuration } from '@/config/Configuration.js'
 
 /**
- * Main auth middleware function.
+ * Main Auth0 OIDC middleware.
  *
- * This function initializes the OIDC middleware with the provided configuration.
- * It sets up the session middleware if needed and handles the OIDC client initialization.
- * It also manages the routing for login, callback, and logout endpoints.
+ * Initializes the Auth0 OIDC client on first request (lazy singleton pattern).
+ * Handles standard OIDC routes (/auth/login, /auth/callback, etc.).
+ * Eagerly loads session and populates c.var.auth0 on every request.
  *
+ * @param initConfig - Optional explicit configuration (overrides env vars)
+ * @returns Middleware handler
+ *
+ * @example
+ * ```typescript
+ * app.use('*', auth0())
+ * app.use('/api/*', requiresAuth())
+ * app.get('/profile', (c) => c.json(c.var.auth0.user))
+ * ```
  */
-export function auth(initConfig: PartialConfig = {}): MiddlewareHandler {
-  let client: ServerClient<Context>;
-  let config: Configuration;
-  // Main OIDC middleware function
+export function auth0(initConfig: PartialConfig = {}): MiddlewareHandler {
+  // Promise-based init: future-proof against async additions
+  let initPromise: Promise<Auth0ClientBundle & { config: Configuration }> | undefined
+
+  // Middleware to set ALS context (for HonoCookieHandler fallback)
+  const setHonoContext = createMiddleware(async (c, next) => {
+    return HonoCookieHandler.setContext(c, () => next())
+  })
+
+  // Main OIDC middleware with lazy singleton init
   const oidcMiddleware: MiddlewareHandler = createMiddleware<OIDCEnv>(
     async (c, next: Next): Promise<Response | void> => {
       try {
-        if (!client) {
-          // Initialize the client
-          const withEnvVars = assignFromEnv(initConfig, {
-            ...c.env,
-            ...(process.env ?? {}),
-          });
-          config = parseConfiguration(withEnvVars);
-          client = initializeOidcClient(config);
+        // === LAZY SINGLETON INITIALIZATION ===
+        if (!initPromise) {
+          initPromise = Promise.resolve().then(() => {
+            // Get runtime environment (no process.env!)
+            const runtimeEnv = env(c)
+
+            // Merge: explicit config > env vars > defaults
+            const withEnvVars = assignFromEnv(initConfig, runtimeEnv)
+
+            // Parse and validate config
+            const config = parseConfiguration(withEnvVars)
+
+            // Initialize OIDC client with retained state store
+            const bundle = initializeOidcClient(config)
+
+            return { ...bundle, config }
+          })
         }
-        c.set("auth0Client", client);
-        c.set("auth0Configuration", config);
 
-        // Use destructuring with defaults to ensure routes is always defined
-        const { routes, authRequired, mountRoutes } = config;
-        const { login, callback, logout, backchannelLogout } = routes;
+        // Await initialization (handles cold start concurrency)
+        // cookieHandler not destructured — stateless singleton, referenced internally by stateStore
+        const { serverClient, stateStore, config } = await initPromise
 
-        // Handle login route
+        // === SET CONTEXT VARIABLES ===
+        c.set('auth0Client', serverClient)
+        c.set('auth0Configuration', config)
+        // TypeScript cannot resolve const string keys against ContextVariableMap augmentation
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ;(c as any).set(STATE_STORE_KEY, stateStore)
+
+        // === ROUTE HANDLING ===
+        // Check if this request matches a mounted auth route
+        const { routes, mountRoutes } = config
+        const { login, callback, logout, backchannelLogout } = routes
+
+        // /auth/login
         if (
           mountRoutes &&
-          !config.customRoutes.includes("login") &&
+          !config.customRoutes.includes('login') &&
           c.req.path === login &&
-          c.req.method === "GET"
+          c.req.method === 'GET'
         ) {
-          return loginHandler()(c, next);
+          return loginHandler()(c, next)
         }
 
-        // Handle callback route
+        // /auth/callback
         if (
           mountRoutes &&
-          !config.customRoutes.includes("callback") &&
+          !config.customRoutes.includes('callback') &&
           c.req.path === callback
         ) {
-          return callbackHandler()(c, next);
+          return callbackHandler()(c, next)
         }
 
-        // Handle logout route
+        // /auth/logout
         if (
           mountRoutes &&
-          !config.customRoutes.includes("logout") &&
+          !config.customRoutes.includes('logout') &&
           c.req.path === logout &&
-          c.req.method === "GET"
+          c.req.method === 'GET'
         ) {
-          return logoutHandler()(c, next);
+          return logoutHandler()(c, next)
         }
 
-        // Handle backchannel logout route
+        // /auth/backchannel-logout
         if (
           mountRoutes &&
-          !config.customRoutes.includes("backchannelLogout") &&
+          !config.customRoutes.includes('backchannelLogout') &&
           c.req.path === backchannelLogout &&
-          c.req.method === "POST"
+          c.req.method === 'POST'
         ) {
-          return backchannelLogoutHandler()(c, next);
+          return backchannelLogoutHandler()(c, next)
         }
 
-        // Handle unauthenticated requests
-        if (authRequired) {
-          return requiresAuth()(c, next);
+        // === EAGER SESSION LOADING & CONTEXT POPULATION ===
+        // Load session on every request (~1-2ms for cookie parse + decrypt)
+        const session = await getCachedSession(c)
+
+        // Ensure cache is set (getCachedSession should do this, but be explicit)
+        // TypeScript cannot resolve const string keys against ContextVariableMap augmentation
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ;(c as any).set(SESSION_CACHE_KEY, session ?? null)
+
+        // Populate c.var.auth0 with user, session, org
+        const user = session?.user ?? null
+        const org = user?.org_id
+          ? { id: user.org_id, name: user.org_name }
+          : null
+
+        c.set('auth0', {
+          user: user as Auth0User | null,
+          session: session as Auth0Session | null,
+          org: org as Auth0Organization | null,
+        } as Auth0Context)
+
+        // === OPTIONAL AUTH ENFORCEMENT ===
+        if (config.authRequired) {
+          return requiresAuth()(c, next)
         }
-      } catch (error) {
-        console.error("AUTH0 Middleware Error:", error);
-        return c.text("Internal Server Error", 500);
+
+        // Continue to next middleware
+        return next()
+      } catch (err) {
+        // Map server-js errors to SDK errors, propagate to app.onError
+        throw mapServerError(err)
       }
-      // // Continue to the next middleware or route handler
-      return await next();
     },
-  );
+  )
 
-  const setHonoContext = createMiddleware(async (c, next) => {
-    return HonoCookieHandler.setContext(c, next);
-  });
-
-  return every(setHonoContext, oidcMiddleware);
+  // Compose: setHonoContext (ALS) + oidcMiddleware
+  return every(setHonoContext, oidcMiddleware)
 }
+
+/**
+ * @deprecated Use auth0() instead. This alias is maintained for backward compatibility.
+ */
+export const auth = auth0

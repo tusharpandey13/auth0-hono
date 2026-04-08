@@ -30,14 +30,26 @@ export const envHasConfig = (
   );
 };
 
+/**
+ * Merge environment variables with explicit config.
+ *
+ * Resolution order:
+ * 1. Explicit config values (highest priority)
+ * 2. Environment variables from runtimeEnv
+ * 3. Zod schema defaults (lowest priority)
+ *
+ * @param config - Explicit configuration object
+ * @param runtimeEnv - Runtime environment variables (from hono/adapter env(c), NOT process.env)
+ * @returns Merged configuration with env vars applied
+ */
 export const assignFromEnv = (
   config: PartialConfig,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  env: Record<string, any>,
+  runtimeEnv: Record<string, any>,
 ): InitConfiguration => {
-  const configWithoutEnv = config ?? ({} as PartialConfig);
-  if (!envHasConfig(env)) {
-    return configWithoutEnv as InitConfiguration;
+  const configWithoutEnv = config ?? ({} as PartialConfig)
+  if (!envHasConfig(runtimeEnv)) {
+    return configWithoutEnv as InitConfiguration
   }
 
   const {
@@ -46,10 +58,12 @@ export const assignFromEnv = (
     AUTH0_CLIENT_SECRET,
     BASE_URL,
     AUTH0_AUDIENCE,
-  } = env;
+    AUTH0_SESSION_ENCRYPTION_KEY,
+  } = runtimeEnv
 
-  const authorizationParams = {...configWithoutEnv.authorizationParams};
-  authorizationParams.audience = authorizationParams.audience ?? AUTH0_AUDIENCE;
+  const authorizationParams = { ...configWithoutEnv.authorizationParams }
+  authorizationParams.audience =
+    authorizationParams.audience ?? AUTH0_AUDIENCE
 
   return {
     ...configWithoutEnv,
@@ -61,8 +75,7 @@ export const assignFromEnv = (
     session: {
       ...(configWithoutEnv.session || {}),
       secret:
-        configWithoutEnv.session?.secret ??
-        process.env.AUTH0_SESSION_ENCRYPTION_KEY,
+        configWithoutEnv.session?.secret ?? AUTH0_SESSION_ENCRYPTION_KEY,
     },
-  };
-};
+  }
+}

@@ -16,16 +16,22 @@ export class HonoCookieHandler implements CookieHandler<any> {
     return this.localStore.run(context, callback);
   }
 
-  private static getContext(): Context {
-    const ctx = this.localStore.getStore();
+  /**
+   * Resolve context: storeOptions first, ALS fallback.
+   * storeOptions is passed by server-js on every method call.
+   */
+  private getContext(storeOptions?: Context): Context {
+    const ctx = storeOptions ?? HonoCookieHandler.localStore.getStore();
     if (!ctx) {
-      throw new Error("No context available. Did you call setContext?");
+      throw new Error(
+        "No Hono Context available. Ensure auth0() middleware is registered."
+      );
     }
     return ctx;
   }
 
-  getCookies(): Record<string, string> {
-    const { req } = HonoCookieHandler.getContext();
+  getCookies(storeOptions?: Context): Record<string, string> {
+    const { req } = this.getContext(storeOptions);
     return Object.fromEntries(
       (req.header("Cookie") ?? "").split(";").map((cookie) => {
         const [key, ...val] = cookie.trim().split("=");
@@ -38,6 +44,7 @@ export class HonoCookieHandler implements CookieHandler<any> {
     name: string,
     value: string,
     options?: CookieSerializeOptions,
+    storeOptions?: Context,
   ): string {
     const cookieOptions: CookieOptions | undefined = options
       ? {
@@ -46,18 +53,18 @@ export class HonoCookieHandler implements CookieHandler<any> {
           priority: options.priority ? capitalize(options.priority) : undefined,
         }
       : undefined;
-    const ctx = HonoCookieHandler.getContext();
+    const ctx = this.getContext(storeOptions);
     setCookie(ctx, name, value, cookieOptions);
     return value;
   }
 
-  getCookie(name: string): string | undefined {
-    const ctx = HonoCookieHandler.getContext();
+  getCookie(name: string, storeOptions?: Context): string | undefined {
+    const ctx = this.getContext(storeOptions);
     return getCookie(ctx, name);
   }
 
-  deleteCookie(name: string): void {
-    const ctx = HonoCookieHandler.getContext();
+  deleteCookie(name: string, storeOptions?: Context): void {
+    const ctx = this.getContext(storeOptions);
     setCookie(ctx, name, "", { path: "/", maxAge: 0 });
   }
 }

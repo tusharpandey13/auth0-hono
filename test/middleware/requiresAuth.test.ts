@@ -1,11 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Context } from "hono";
 import { accepts } from "hono/accepts";
-import { HTTPException } from "hono/http-exception";
 import { afterEach, beforeEach, describe, expect, it, Mock, vi } from "vitest";
 import { getClient } from "../../src/config/index";
 import { login } from "../../src/middleware/login";
 import { requiresAuth } from "../../src/middleware/requiresAuth";
+import { LoginRequiredError } from "../../src/errors/errors";
 
 // Mock dependencies
 vi.mock("hono/accepts", () => ({
@@ -132,16 +132,14 @@ describe("requiresAuth middleware", () => {
 
       it("should throw a 401 error", async () => {
         await expect(requiresAuth()(mockContext, mockNext)).rejects.toThrow(
-          HTTPException,
+          LoginRequiredError,
         );
 
         try {
           await requiresAuth()(mockContext, mockNext);
         } catch (error) {
-          expect((error as HTTPException).status).toBe(401);
-          expect((error as HTTPException).message).toBe(
-            "Authentication required",
-          );
+          expect((error as LoginRequiredError).status).toBe(401);
+          expect((error as LoginRequiredError).code).toBe('login_required');
         }
 
         expect(login).not.toHaveBeenCalled();
@@ -157,16 +155,14 @@ describe("requiresAuth middleware", () => {
 
       it("should throw a 401 error even if request accepts HTML", async () => {
         await expect(requiresAuth()(mockContext, mockNext)).rejects.toThrow(
-          HTTPException,
+          LoginRequiredError,
         );
 
         try {
           await requiresAuth()(mockContext, mockNext);
         } catch (error) {
-          expect((error as HTTPException).status).toBe(401);
-          expect((error as HTTPException).message).toBe(
-            "Authentication required",
-          );
+          expect((error as LoginRequiredError).status).toBe(401);
+          expect((error as LoginRequiredError).code).toBe('login_required');
         }
 
         expect(login).not.toHaveBeenCalled();
@@ -183,15 +179,13 @@ describe("requiresAuth middleware", () => {
       it("should override configuration and throw a 401 error", async () => {
         await expect(
           requiresAuth("error")(mockContext, mockNext),
-        ).rejects.toThrow(HTTPException);
+        ).rejects.toThrow(LoginRequiredError);
 
         try {
           await requiresAuth("error")(mockContext, mockNext);
         } catch (error) {
-          expect((error as HTTPException).status).toBe(401);
-          expect((error as HTTPException).message).toBe(
-            "Authentication required",
-          );
+          expect((error as LoginRequiredError).status).toBe(401);
+          expect((error as LoginRequiredError).code).toBe('login_required');
         }
 
         expect(login).not.toHaveBeenCalled();

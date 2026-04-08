@@ -2,8 +2,8 @@ import { getClient } from "@/config/index.js";
 import { OIDCEnv } from "@/lib/honoEnv.js";
 import { Context, Next } from "hono";
 import { accepts } from "hono/accepts";
-import { HTTPException } from "hono/http-exception";
 import { login } from "./login.js";
+import { LoginRequiredError } from '@/errors/errors.js';
 
 type OnRequiredAuth = "error" | "login";
 /**
@@ -37,9 +37,7 @@ export function requiresAuth(behavior?: OnRequiredAuth) {
         (!behavior && configuration.errorOnRequiredAuth);
 
       if (shouldFail) {
-        throw new HTTPException(401, {
-          message: "Authentication required",
-        });
+        throw new LoginRequiredError('Authentication required');
       }
 
       return login()(c, next);

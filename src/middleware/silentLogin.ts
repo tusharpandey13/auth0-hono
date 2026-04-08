@@ -27,15 +27,24 @@ const getCookieOptions = (c: Context<OIDCEnv>): CookieOptions => {
   return cookieOptions;
 };
 
-export const pauseSilentLogin = () =>
+/**
+ * Cancel silent login attempts by setting a cookie.
+ * This prevents automatic silent login attempts on the next request.
+ */
+export const cancelSilentLogin = () =>
   createMiddleware(async (c) => {
-    setCookie(c, COOKIE_NAME, "true", getCookieOptions(c));
-  });
+    setCookie(c, COOKIE_NAME, 'true', getCookieOptions(c))
+  })
+
+/**
+ * @deprecated Use cancelSilentLogin instead.
+ */
+export const pauseSilentLogin = cancelSilentLogin
 
 export const resumeSilentLogin = () =>
   createMiddleware(async (c) => {
-    deleteCookie(c, COOKIE_NAME, getCookieOptions(c));
-  });
+    deleteCookie(c, COOKIE_NAME, getCookieOptions(c))
+  })
 
 export const attemptSilentLogin = () => {
   return createMiddleware<OIDCEnv>(async (c, next) => {
@@ -57,7 +66,7 @@ export const attemptSilentLogin = () => {
       return next();
     }
 
-    await pauseSilentLogin()(c, next);
+    await cancelSilentLogin()(c, next);
 
     return login({ silent: true })(c, next);
   });

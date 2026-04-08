@@ -1,5 +1,8 @@
 import { OIDCAuthorizationRequestParams } from "@/config/authRequest.js";
 import { SessionConfiguration } from "@/types/session.js";
+import { Context } from 'hono';
+import { SessionData } from '@auth0/auth0-server-js';
+import { Auth0Error } from '@/errors/Auth0Error.js';
 
 type Routes = {
   login: string;
@@ -138,12 +141,26 @@ export interface Configuration {
    */
   httpTimeout?: number;
 
-  // Hooks
-  // afterCallback?: (
-  //   c: Context,
-  //   session: OidcSession,
-  //   state: any,
-  // ) => Promise<OIDCUserInfoResponse> | OIDCUserInfoResponse;
+  /**
+   * Hook called on successful or failed login callback.
+   *
+   * On success (error is null):
+   * - Return SessionData to enrich the session (persisted)
+   * - Return Response to override the redirect response
+   * - Return void/undefined for default behavior
+   *
+   * On error (session is null):
+   * - Return Response to override the error page
+   * - Return anything else to be ignored (default error page shown)
+   * - Throw to mask the error (not recommended)
+   *
+   * Hook errors are logged but never mask the original auth error.
+   */
+  onCallback?: (
+    c: Context,
+    error: Auth0Error | null,
+    session: SessionData | null,
+  ) => SessionData | Response | void | Promise<SessionData | Response | void>
 
   /**
    * The method to use for client authentication.

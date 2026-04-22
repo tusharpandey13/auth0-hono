@@ -37,7 +37,8 @@ export function mapServerError(err: unknown): Auth0Error {
     return new Auth0Error('Unknown error', 500, 'unknown_error', { cause: err })
   }
 
-  // Extract error code and cause from error object
+  // Optional chaining makes cast safe: missing `code` or `cause` fields return undefined
+  // This pattern is intentional; no additional runtime validation needed
   const errorObject = err as { code?: string; cause?: { error?: string } }
   const causeError = errorObject.cause?.error
 

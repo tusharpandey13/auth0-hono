@@ -1,6 +1,6 @@
-import { Context, MiddlewareHandler, Next } from 'hono'
-import { Auth0Error } from '@/errors/Auth0Error.js'
-import { Auth0Context } from '@/types/auth0.js'
+import { Auth0Error } from "@/errors/Auth0Error.js";
+import { Auth0Context } from "@/types/auth0.js";
+import { Context, MiddlewareHandler, Next } from "hono";
 
 /**
  * Options for requiresOrg middleware.
@@ -13,10 +13,13 @@ import { Auth0Context } from '@/types/auth0.js'
 type RequiresOrgOptions =
   | undefined
   | { orgId: string }
-  | ((c: Context) => boolean)
+  | ((c: Context) => boolean);
 
 /**
  * Middleware: verifies user has organization context.
+ *
+ * Must be registered AFTER requiresAuth() middleware.
+ * If called before, returns 500 error with message.
  *
  * Enforces user has org_id claim. Optionally validates:
  * - Specific organization membership
@@ -24,12 +27,18 @@ type RequiresOrgOptions =
  *
  * Populates c.var.auth0.org with { id, name } after validation.
  *
- * Note: Must run after requiresAuth(). If called before, throws 500.
- *
  * @param options - Optional org validation rules
  *
  * @example
  * ```typescript
+ * // CORRECT: requiresAuth first, then requiresOrg
+ * app.use('/dashboard', requiresAuth())
+ * app.use('/dashboard', requiresOrg())
+ *
+ * // WRONG: requiresOrg before requiresAuth → 500 error
+ * app.use('/admin', requiresOrg())
+ * app.use('/admin', requiresAuth())
+ *
  * // Any org required
  * app.use('/dashboard', requiresOrg())
  *
@@ -46,72 +55,75 @@ type RequiresOrgOptions =
 export function requiresOrg(options?: RequiresOrgOptions): MiddlewareHandler {
   return async (c: Context, next: Next) => {
     // Get user from context (must be authenticated and have run requiresAuth() first)
-    const user = c.var.auth0?.user
+    const user = c.var.auth0?.user;
 
     // Fail if not authenticated (indicates misconfiguration)
     if (!user) {
       throw new Auth0Error(
-        'requiresOrg() must be registered after requiresAuth()',
+        "requiresOrg() must be registered after requiresAuth()",
         500,
-        'configuration_error'
-      )
+        "configuration_error",
+      );
     }
 
     // Check user has org_id claim
-    const orgId = user.org_id
+    const orgId = user.org_id;
     if (!orgId) {
       throw new Auth0Error(
-        'User does not belong to any organization',
+        "User does not belong to any organization",
         403,
-        'missing_organization'
-      )
+        "missing_organization",
+      );
     }
 
     // If options specify a specific org, check it matches
-    if (options && typeof options === 'object' && 'orgId' in options) {
+    if (options && typeof options === "object" && "orgId" in options) {
       if (orgId !== options.orgId) {
         throw new Auth0Error(
-          'User does not belong to the required organization',
+          "User does not belong to the required organization",
           403,
-          'organization_mismatch'
-        )
+          "organization_mismatch",
+        );
       }
     }
 
     // If options is a function, call custom check with error handling
-    if (typeof options === 'function') {
+    if (typeof options === "function") {
       try {
         if (!options(c)) {
           throw new Auth0Error(
-            'Organization check failed',
+            "Organization check failed",
             403,
-            'organization_check_failed'
-          )
+            "organization_check_failed",
+          );
         }
       } catch (err) {
         // If error is already an Auth0Error, re-throw as-is
-        if (err instanceof Auth0Error) throw err
+        if (err instanceof Auth0Error) throw err;
         // organization_check_error: intentional error code when user-provided check function throws
         // This wraps unexpected errors from custom validators to prevent unhandled exceptions
         throw new Auth0Error(
-          'Organization check function threw an error',
+          "Organization check function threw an error",
           500,
-          'organization_check_error',
-          { cause: err }
-        )
+          "organization_check_error",
+          { cause: err },
+        );
       }
     }
 
     // Guarantee c.var.auth0.org is populated after this middleware
     // (in case it was not populated by auth0() middleware)
     if (!c.var.auth0?.org) {
-      c.set('auth0', {
+      // Type guard: org_id is truthy (checked above), but may be number from config drift
+      const orgIdString = typeof orgId === "string" ? orgId : String(orgId);
+
+      c.set("auth0", {
         ...c.var.auth0,
-        org: { id: orgId as string, name: user.org_name as string | undefined },
-      } as Auth0Context)
+        org: { id: orgIdString, name: user.org_name as string | undefined },
+      } as Auth0Context);
     }
 
     // All checks passed — continue
-    return next()
-  }
+    return next();
+  };
 }

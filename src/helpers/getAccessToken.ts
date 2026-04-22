@@ -59,15 +59,36 @@ export async function getAccessToken(
 ): Promise<Auth0TokenSet> {
   const { client } = getClient(c)
 
-  // Create cache key based on audience (or default if not specified)
-  // Use robust key format to prevent collision: if audience is literal '__no_audience__', still unique
-  const cacheKey = options?.audience ? `aud:${options.audience}` : 'aud:'
+  // Use JSON serialization for safe cache key (handles special chars, collisions)
+  const cacheKey = JSON.stringify({ aud: options?.audience ?? null })
+
+  // NOTE: This cache uses non-atomic read-modify-write on Map.
+  // Under extreme concurrency, two requests for same audience could both miss cache
+  // and create duplicate refresh promises. This is acceptable because:
+  // 1. Both promises resolve to same token (idempotent)
+  // 2. Extra refresh work is wasteful but not incorrect
+  // 3. Serverless handlers execute sequentially per request (low risk)
+  // 4. Token refresh is already server-side cached (additional level)
 
   // Get or initialize refresh promise cache for this request
-  let refreshCache = c.get(REFRESH_CACHE_KEY) as Map<string, Promise<TokenSet>> | undefined
-  if (!refreshCache) {
-    refreshCache = new Map()
-    c.set(REFRESH_CACHE_KEY, refreshCache)
+  const cached = c.get(REFRESH_CACHE_KEY);
+  let refreshCache: Map<string, Promise<TokenSet>>;
+
+  // Runtime check: ensure cache is actually a Map (not overwritten by other middleware)
+  if (!cached || !(cached instanceof Map)) {
+    // Either no cache or invalid type: create new Map
+    if (cached && !(cached instanceof Map)) {
+      // Log that cache was invalid type (helps debug conflicts)
+      const { configuration } = getClient(c);
+      configuration.debug(
+        `Cache key collision detected: ${REFRESH_CACHE_KEY} was not a Map, creating new cache`
+      );
+    }
+
+    refreshCache = new Map<string, Promise<TokenSet>>();
+    c.set(REFRESH_CACHE_KEY, refreshCache);
+  } else {
+    refreshCache = cached;
   }
 
   // Check if another handler is already refreshing this audience
@@ -95,7 +116,13 @@ export async function getAccessToken(
 
     return tokenSet
   } catch (err) {
-    // Map server-js error to SDK error
+    // On error, remove stale promise from cache so next call attempts fresh refresh
+    refreshCache.delete(cacheKey)
+
+    // Also invalidate session cache (same as success path)
+    invalidateSessionCache(c)
+
+    // Map error to SDK error type and throw
     throw mapServerError(err)
   }
 }

@@ -66,8 +66,16 @@ export const attemptSilentLogin = () => {
       return next();
     }
 
+    // Set skip cookie first (prevent infinite retry loops)
     await cancelSilentLogin()(c, next);
 
-    return login({ silent: true })(c, next);
+    try {
+      return await login({ silent: true })(c, next);
+    } catch (err) {
+      // Login failed — clear the skip cookie so user can retry later
+      // This allows recovery if silent login temporarily fails
+      deleteCookie(c, COOKIE_NAME, getCookieOptions(c));
+      throw err;  // Let error propagate (user sees appropriate error)
+    }
   });
 };

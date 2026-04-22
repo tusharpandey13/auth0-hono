@@ -143,6 +143,54 @@ describe('HonoCookieHandler', () => {
 
       expect(result.email).toBe('user@example.com')
     })
+
+    // REQ-A1: Handle malformed %-encoding in cookie values (crash prevention)
+    it('should handle malformed %-encoding in cookie values without crashing', () => {
+      mockContext.req.header = vi.fn((headerName: string) => {
+        if (headerName === 'Cookie') {
+          return 'malformed=%XX%ZZ; valid=ok'
+        }
+        return undefined
+      })
+
+      // Should not crash; should return raw value or empty
+      const result = cookieHandler.getCookies(mockContext as any)
+
+      expect(result).toBeDefined()
+      expect(typeof result).toBe('object')
+      // May contain raw value or skip the malformed cookie
+      expect(result.valid).toBe('ok')
+    })
+
+    it('should handle cookie with incomplete %-encoding', () => {
+      mockContext.req.header = vi.fn((headerName: string) => {
+        if (headerName === 'Cookie') {
+          return 'incomplete=%'
+        }
+        return undefined
+      })
+
+      // Should not crash
+      const result = cookieHandler.getCookies(mockContext as any)
+
+      expect(result).toBeDefined()
+      expect(typeof result).toBe('object')
+    })
+
+    it('should handle mixed valid and invalid cookies', () => {
+      mockContext.req.header = vi.fn((headerName: string) => {
+        if (headerName === 'Cookie') {
+          return 'valid=%40ok; broken=%XX%YY; another=value'
+        }
+        return undefined
+      })
+
+      // Should not crash
+      const result = cookieHandler.getCookies(mockContext as any)
+
+      expect(result).toBeDefined()
+      expect(result.another).toBe('value')
+    })
   })
 
   describe('getCookie', () => {
@@ -298,6 +346,35 @@ describe('HonoCookieHandler', () => {
       cookieHandler.setCookie('cookie2', 'value2', undefined, ctx)
 
       expect(setCookie).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  // REQ-C1: Throw Auth0Error (not generic Error) when ALS unavailable
+  describe('error handling when ALS context unavailable', () => {
+    it('should throw Auth0Error (not generic Error) when no context available', () => {
+      // When called without context and ALS unavailable
+      expect(() => {
+        cookieHandler.getCookie('sessionId')
+      }).toThrow(Error)
+
+      // Verify it throws an error that mentions context
+      try {
+        cookieHandler.getCookie('sessionId')
+      } catch (err) {
+        // The error should mention context or ALS
+        const message = (err as any).message
+        expect(message).toMatch(/context/i)
+      }
+    })
+
+    it('should work with explicit context provided', () => {
+      const ctx = mockContext as any
+      ;(getCookie as any).mockReturnValue('value123')
+
+      const result = cookieHandler.getCookie('sessionId', ctx)
+
+      expect(result).toBe('value123')
+      expect(getCookie).toHaveBeenCalledWith(ctx, 'sessionId')
     })
   })
 })

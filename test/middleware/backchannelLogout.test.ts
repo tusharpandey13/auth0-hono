@@ -187,4 +187,68 @@ describe("backchannelLogout middleware", () => {
       });
     });
   });
+
+  // REQ-A2: Handle parseBody errors (crash prevention)
+  describe("when parseBody throws an error (malformed request)", () => {
+    beforeEach(() => {
+      // Override parseBody to throw SyntaxError (truncated body)
+      mockContext.req.parseBody = vi
+        .fn()
+        .mockRejectedValue(new SyntaxError("Unexpected end of JSON input"));
+    });
+
+    it("should throw Auth0Error with 400 status", async () => {
+      await expect(backchannelLogout()(mockContext, nextFn)).rejects.toThrow(
+        Auth0Error,
+      );
+
+      try {
+        await backchannelLogout()(mockContext, nextFn);
+      } catch (error) {
+        expect((error as Auth0Error).status).toBe(400);
+        expect((error as Auth0Error).code).toBe("invalid_request");
+      }
+    });
+  });
+
+  describe("when parseBody throws error with invalid encoding", () => {
+    beforeEach(() => {
+      // Override parseBody to throw URIError
+      mockContext.req.parseBody = vi
+        .fn()
+        .mockRejectedValue(new URIError("URI malformed"));
+    });
+
+    it("should throw Auth0Error with 400 status", async () => {
+      await expect(backchannelLogout()(mockContext, nextFn)).rejects.toThrow(
+        Auth0Error,
+      );
+
+      try {
+        await backchannelLogout()(mockContext, nextFn);
+      } catch (error) {
+        expect((error as Auth0Error).status).toBe(400);
+        expect((error as Auth0Error).code).toBe("invalid_request");
+      }
+    });
+  });
+
+  describe("when request body is empty", () => {
+    beforeEach(() => {
+      mockContext.req.parseBody = vi.fn().mockResolvedValue({});
+    });
+
+    it("should throw Auth0Error for missing logout_token", async () => {
+      await expect(backchannelLogout()(mockContext, nextFn)).rejects.toThrow(
+        Auth0Error,
+      );
+
+      try {
+        await backchannelLogout()(mockContext, nextFn);
+      } catch (error) {
+        expect((error as Auth0Error).status).toBe(400);
+        expect((error as Auth0Error).code).toBe("invalid_request");
+      }
+    });
+  });
 });

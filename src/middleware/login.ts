@@ -87,9 +87,12 @@ export const login = (params: LoginParams = {}) => {
 
       if (forwardParams && forwardParams.length > 0) {
         for (const param of forwardParams) {
-          const value = c.req.query(param)
+          const value = c.req.query(param);
+
           if (value) {
-            paramsFromQuery[param] = value
+            // Normalize to string: if array, use first value (standard behavior)
+            const normalizedValue = Array.isArray(value) ? value[0] : value;
+            paramsFromQuery[param] = normalizedValue;
           }
         }
       }

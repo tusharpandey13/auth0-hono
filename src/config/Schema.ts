@@ -156,6 +156,43 @@ export const ConfigurationSchema = z
       .optional()
       .default(() => globalThis.fetch),
   })
+  .transform((data) => {
+    const isSecure = /^https:/i.test(data.baseURL);
+
+    // Compute default clientAuthMethod based on conditions
+    let clientAuthMethod = data.clientAuthMethod;
+    if (clientAuthMethod === undefined) {
+      if (
+        data.authorizationParams?.response_type === "id_token" &&
+        !data.pushedAuthorizationRequests
+      ) {
+        clientAuthMethod = "none";
+      } else if (data.clientAssertionSigningKey) {
+        clientAuthMethod = "private_key_jwt";
+      } else {
+        clientAuthMethod = "client_secret_basic";
+      }
+    }
+
+    // Compute response_mode default for non-code response types
+    const authParams = { ...data.authorizationParams };
+    if (!authParams.response_mode && authParams.response_type !== "code") {
+      authParams.response_mode = "form_post";
+    }
+
+    return {
+      ...data,
+      clientAuthMethod,
+      session: {
+        ...data.session,
+        cookie: {
+          ...data.session.cookie,
+          secure: data.session.cookie.secure ?? isSecure,
+        },
+      },
+      authorizationParams: authParams,
+    };
+  })
   .superRefine((data, ctx) => {
     // Handle secure cookie validation based on baseURL
     if (data.session && typeof data.session !== "boolean") {
@@ -168,9 +205,6 @@ export const ConfigurationSchema = z
               "Setting your cookie to insecure when over https is not recommended, I hope you know what you're doing.",
             path: ["session", "cookie", "secure"],
           });
-        } else if (cookie.secure === undefined) {
-          // Default to true for HTTPS
-          data.session.cookie.secure = true;
         }
       } else if (cookie.secure === true) {
         // Error for HTTP with secure cookie
@@ -180,9 +214,6 @@ export const ConfigurationSchema = z
             "Cookies set with the `Secure` property won't be attached to http requests",
           path: ["session", "cookie", "secure"],
         });
-      } else if (cookie.secure === undefined) {
-        // Default to false for HTTP
-        data.session.cookie.secure = false;
       }
     }
 
@@ -210,9 +241,6 @@ export const ConfigurationSchema = z
           message: "For this response_type, response_mode must be 'form_post'",
           path: ["authorizationParams", "response_mode"],
         });
-      } else if (!responseMode) {
-        // Set default for non-code response types
-        data.authorizationParams.response_mode = "form_post";
       }
 
       // Warning about form_post with HTTP baseURL
@@ -273,20 +301,6 @@ export const ConfigurationSchema = z
         message: "Public PAR clients are not supported.",
         path: ["clientAuthMethod"],
       });
-    }
-
-    // Set default clientAuthMethod
-    if (data.clientAuthMethod === undefined) {
-      if (
-        data.authorizationParams?.response_type === "id_token" &&
-        !data.pushedAuthorizationRequests
-      ) {
-        data.clientAuthMethod = "none";
-      } else if (data.clientAssertionSigningKey) {
-        data.clientAuthMethod = "private_key_jwt";
-      } else {
-        data.clientAuthMethod = "client_secret_basic";
-      }
     }
 
     // Validate clientAssertionSigningKey

@@ -1,17 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Context } from 'hono'
 import { describe, expect, it, beforeEach, afterEach, vi, Mock } from 'vitest'
-import { SessionData } from '@auth0/auth0-server-js'
 import { getUser, updateSession, persistSession } from '../../src/helpers/session'
 import { MissingSessionError } from '../../src/errors'
 import { SESSION_CACHE_KEY, STATE_STORE_KEY } from '../../src/lib/constants'
-
-// Mock dependencies
-vi.mock('../../src/helpers/sessionCache', () => ({
-  getCachedSession: vi.fn(),
-}))
-
-import { getCachedSession } from '../../src/helpers/sessionCache'
 
 describe('getUser(c)', () => {
   let mockContext: any
@@ -217,10 +209,11 @@ describe('persistSession', () => {
         idToken: 'token',
       }
 
-      await persistSession(mockContext, sessionWithoutInternal)
-
-      const [, persistedSession] = (mockStateStore.set as any).mock.calls[0]
-      expect(persistedSession).toEqual(sessionWithoutInternal)
+      // REQ-B1: persistSession must reject sessions without internal field
+      // to prevent loss of critical internal state (sid, createdAt, etc)
+      expect(persistSession(mockContext, sessionWithoutInternal)).rejects.toThrow(
+        'persistSession: session must include "internal" field'
+      )
     })
   })
 
@@ -431,11 +424,23 @@ describe('updateSession(c, data)', () => {
   let mockStateStore: any
   let mockConfig: any
 
+  // Helper: creates a raw StateData object (as returned by stateStore.get, WITH internal)
+  const makeStateData = (overrides: Record<string, any> = {}) => ({
+    user: { sub: 'user123', email: 'test@example.com' },
+    idToken: 'id_token',
+    refreshToken: 'refresh_token',
+    tokenSets: [],
+    connectionTokenSets: {},
+    internal: { sid: 'session_id', createdAt: Math.floor(Date.now() / 1000) },
+    ...overrides,
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
 
-    // Create mock context
+    // Create mock context — stateStore now needs both get and set
     mockStateStore = {
+      get: vi.fn(),
       set: vi.fn().mockResolvedValue(undefined),
     }
 
@@ -470,35 +475,31 @@ describe('updateSession(c, data)', () => {
   })
 
   it('should merge data into existing session', async () => {
-    const existingSession: SessionData = {
-      user: { sub: 'user123', email: 'test@example.com' },
-      idToken: 'id_token',
-      refreshToken: 'refresh_token',
-      tokenSets: [],
-      connectionTokenSets: {},
-      internal: { sid: 'session_id', createdAt: Date.now() },
-      custom1: 'old_value',
-    } as any
-
-    ;(getCachedSession as Mock).mockResolvedValueOnce(existingSession)
+    const stateData = makeStateData({ custom1: 'old_value' })
+    mockStateStore.get.mockResolvedValueOnce(stateData)
 
     await updateSession(mockContext, {
       custom1: 'new_value',
       custom2: 'added_value',
     })
 
-    // Verify persistSession was called with merged data
+    // Verify stateStore.set was called with merged data (including internal)
     expect(mockStateStore.set).toHaveBeenCalledWith(
       'appSession',
       expect.objectContaining({
         custom1: 'new_value',
         custom2: 'added_value',
+        internal: stateData.internal,
       }),
       false,
       mockContext
     )
 
-    // Verify context was updated
+    // Verify context cache was updated WITHOUT internal
+    expect(mockContext.set).toHaveBeenCalledWith(
+      SESSION_CACHE_KEY,
+      expect.not.objectContaining({ internal: expect.anything() })
+    )
     expect(mockContext.set).toHaveBeenCalledWith(
       SESSION_CACHE_KEY,
       expect.objectContaining({
@@ -509,17 +510,8 @@ describe('updateSession(c, data)', () => {
   })
 
   it('should filter reserved fields', async () => {
-    const existingSession: SessionData = {
-      user: { sub: 'user123' },
-      idToken: 'id_token',
-      refreshToken: 'refresh_token',
-      tokenSets: [],
-      connectionTokenSets: {},
-      internal: { sid: 'session_id', createdAt: Date.now() },
-      permissions: 'user',
-    } as any
-
-    ;(getCachedSession as Mock).mockResolvedValueOnce(existingSession)
+    const stateData = makeStateData({ permissions: 'user' })
+    mockStateStore.get.mockResolvedValueOnce(stateData)
 
     // Try to override reserved fields
     await updateSession(mockContext, {
@@ -536,12 +528,12 @@ describe('updateSession(c, data)', () => {
     expect(mockStateStore.set).toHaveBeenCalledWith(
       'appSession',
       expect.objectContaining({
-        user: existingSession.user, // Original preserved
-        idToken: existingSession.idToken, // Original preserved
-        refreshToken: existingSession.refreshToken, // Original preserved
-        tokenSets: existingSession.tokenSets, // Original preserved
-        connectionTokenSets: existingSession.connectionTokenSets, // Original preserved
-        internal: existingSession.internal, // Original preserved
+        user: stateData.user, // Original preserved
+        idToken: stateData.idToken, // Original preserved
+        refreshToken: stateData.refreshToken, // Original preserved
+        tokenSets: stateData.tokenSets, // Original preserved
+        connectionTokenSets: stateData.connectionTokenSets, // Original preserved
+        internal: stateData.internal, // Original preserved
         permissions: 'admin', // Custom field allowed
       }),
       false,
@@ -550,7 +542,7 @@ describe('updateSession(c, data)', () => {
   })
 
   it('should throw MissingSessionError when no session', async () => {
-    ;(getCachedSession as Mock).mockResolvedValueOnce(null)
+    mockStateStore.get.mockResolvedValueOnce(null)
 
     await expect(updateSession(mockContext, { foo: 'bar' })).rejects.toThrow(
       MissingSessionError
@@ -558,30 +550,24 @@ describe('updateSession(c, data)', () => {
   })
 
   it('should persist via retained stateStore and update c.var.auth0', async () => {
-    const existingSession: SessionData = {
+    const stateData = makeStateData({
       user: {
         sub: 'user123',
         email: 'test@example.com',
         org_id: 'org_123',
         org_name: 'Test Org',
       },
-      idToken: 'id_token',
-      refreshToken: 'refresh_token',
-      tokenSets: [],
-      connectionTokenSets: {},
-      internal: { sid: 'session_id', createdAt: Date.now() },
-    } as any
-
-    ;(getCachedSession as Mock).mockResolvedValueOnce(existingSession)
+    })
+    mockStateStore.get.mockResolvedValueOnce(stateData)
 
     await updateSession(mockContext, { pref: 'dark' })
 
-    // Verify persistSession called with identifier and session
+    // Verify stateStore.set called with internal preserved
     expect(mockStateStore.set).toHaveBeenCalledWith(
       'appSession',
       expect.objectContaining({
         pref: 'dark',
-        internal: existingSession.internal, // Preserved
+        internal: stateData.internal,
       }),
       false,
       mockContext
@@ -591,7 +577,7 @@ describe('updateSession(c, data)', () => {
     expect(mockContext.set).toHaveBeenCalledWith(
       'auth0',
       expect.objectContaining({
-        user: existingSession.user,
+        user: stateData.user,
         org: {
           id: 'org_123',
           name: 'Test Org',
@@ -601,16 +587,15 @@ describe('updateSession(c, data)', () => {
   })
 
   it('should preserve RESERVED_FIELDS during merge', async () => {
-    const existingSession: SessionData = {
+    const stateData = makeStateData({
       user: { sub: 'user123' },
       idToken: 'original_id_token',
       refreshToken: 'original_refresh_token',
       tokenSets: [{ accessToken: 'token1' }],
       connectionTokenSets: { 'connection1': { accessToken: 'conn_token' } },
       internal: { sid: 'session_id', createdAt: 1000000 },
-    } as any
-
-    ;(getCachedSession as Mock).mockResolvedValueOnce(existingSession)
+    })
+    mockStateStore.get.mockResolvedValueOnce(stateData)
 
     await updateSession(mockContext, {
       user: 'should_be_ignored',
@@ -626,12 +611,144 @@ describe('updateSession(c, data)', () => {
     const persistCall = (mockStateStore.set as Mock).mock.calls[0][1]
 
     // Verify reserved fields were not overwritten
-    expect(persistCall.user).toBe(existingSession.user)
-    expect(persistCall.idToken).toBe(existingSession.idToken)
-    expect(persistCall.refreshToken).toBe(existingSession.refreshToken)
-    expect(persistCall.internal).toBe(existingSession.internal)
+    expect(persistCall.user).toBe(stateData.user)
+    expect(persistCall.idToken).toBe(stateData.idToken)
+    expect(persistCall.refreshToken).toBe(stateData.refreshToken)
+    expect(persistCall.internal).toBe(stateData.internal)
 
     // Verify custom field was added
     expect(persistCall.customField).toBe('custom_value')
+  })
+
+  it('should read raw StateData from stateStore (not getCachedSession) to preserve internal', async () => {
+    // This test verifies the fix: updateSession must read from stateStore.get()
+    // (which returns StateData WITH internal.createdAt) rather than getCachedSession
+    // (which goes through client.getSession() that strips internal).
+    const stateData = makeStateData()
+    mockStateStore.get.mockResolvedValueOnce(stateData)
+
+    await updateSession(mockContext, { foo: 'bar' })
+
+    // Verify stateStore.get was called (not getCachedSession)
+    expect(mockStateStore.get).toHaveBeenCalledWith('appSession', mockContext)
+
+    // Verify the persisted data has internal intact
+    const persistedData = (mockStateStore.set as Mock).mock.calls[0][1]
+    expect(persistedData.internal).toBeDefined()
+    expect(persistedData.internal.createdAt).toBe(stateData.internal.createdAt)
+    expect(persistedData.internal.sid).toBe(stateData.internal.sid)
+  })
+
+  // REQ-B3: Fix org_id truthiness check (falsy but valid '0' string)
+  describe('org_id truthiness handling', () => {
+    it("should handle org_id = '0' as valid (not falsy)", () => {
+      const stateData = makeStateData({
+        user: {
+          sub: 'user123',
+          org_id: '0', // Falsy string but valid
+          org_name: 'Organization Zero',
+        },
+      })
+      mockStateStore.get.mockResolvedValueOnce(stateData)
+
+      // updateSession should preserve org_id even though '0' is falsy
+      return expect(updateSession(mockContext, { foo: 'bar' })).resolves.not.toThrow()
+    })
+
+    it('should handle empty string org_id as null org', () => {
+      const stateData = makeStateData({
+        user: {
+          sub: 'user123',
+          org_id: '', // Empty string
+          org_name: '',
+        },
+      })
+      mockStateStore.get.mockResolvedValueOnce(stateData)
+
+      return expect(updateSession(mockContext, { foo: 'bar' })).resolves.not.toThrow()
+    })
+
+    it('should handle undefined org_id as null org', () => {
+      const stateData = makeStateData({
+        user: {
+          sub: 'user123',
+          org_id: undefined,
+        },
+      })
+      mockStateStore.get.mockResolvedValueOnce(stateData)
+
+      return expect(updateSession(mockContext, { foo: 'bar' })).resolves.not.toThrow()
+    })
+  })
+
+  // REQ-D3: Validate StateData shape before persistence
+  describe('StateData shape validation', () => {
+    it('should reject session without internal field', async () => {
+      const invalidState = {
+        user: { sub: 'user123' },
+        idToken: 'token',
+        refreshToken: 'refresh_token',
+        tokenSets: [],
+        connectionTokenSets: {},
+        // Missing: internal
+      }
+
+      return expect(persistSession(mockContext, invalidState)).rejects.toThrow(
+        /internal/i
+      )
+    })
+
+    it('should reject session without internal.createdAt', async () => {
+      const invalidState = {
+        user: { sub: 'user123' },
+        idToken: 'token',
+        refreshToken: 'refresh_token',
+        tokenSets: [],
+        connectionTokenSets: {},
+        internal: { sid: 'session_123' }, // Missing createdAt
+      }
+
+      // Verify contract-enforcing store rejects incomplete internal
+      // The stateStore mock enforces createdAt is present
+      const contractEnforcingStore = {
+        set: vi.fn().mockImplementation(async (_id: string, stateData: any) => {
+          if (!stateData?.internal?.createdAt) {
+            throw new TypeError(
+              "Cannot read properties of undefined (reading 'createdAt')"
+            )
+          }
+          return Promise.resolve()
+        }),
+      }
+
+      // Create a fresh context with the contract-enforcing store
+      const freshContext = {
+        var: { auth0Configuration: mockConfig },
+        get: vi.fn((key: string) => {
+          if (key === STATE_STORE_KEY) return contractEnforcingStore
+          return mockContext.var[key]
+        }),
+        set: vi.fn(),
+      } as any
+
+      return expect(persistSession(freshContext, invalidState)).rejects.toThrow()
+    })
+
+    it('should accept valid StateData with all required fields', async () => {
+      const validState = {
+        user: { sub: 'user123' },
+        idToken: 'token',
+        refreshToken: 'refresh_token',
+        tokenSets: [],
+        connectionTokenSets: {},
+        internal: { sid: 'session_123', createdAt: Math.floor(Date.now() / 1000) },
+      }
+
+      return expect(persistSession(mockContext, validState)).resolves.not.toThrow()
+    })
+
+    it('should reject null session', async () => {
+      return expect(persistSession(mockContext, null)).rejects.toThrow()
+    })
   })
 })

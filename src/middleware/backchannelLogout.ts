@@ -21,7 +21,20 @@ export const backchannelLogout = () => {
           throw new Auth0Error("Invalid content type. Expected 'application/x-www-form-urlencoded'.", 400, 'invalid_request')
         }
 
-        const { logout_token: logoutToken } = await c.req.parseBody()
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let body: Record<string, any>;
+        try {
+          body = await c.req.parseBody();
+        } catch (parseErr) {
+          throw new Auth0Error(
+            'Failed to parse request body',
+            400,
+            'invalid_request',
+            { cause: parseErr }
+          );
+        }
+
+        const { logout_token: logoutToken } = body
 
         if (!logoutToken || typeof logoutToken !== 'string') {
           throw new Auth0Error('Missing `logout_token` in the request body.', 400, 'invalid_request')

@@ -78,6 +78,57 @@ describe("Configuration Parser", () => {
     expect(firstParsed).toBe(secondParsed); // Should be the same object instance (cached)
   });
 
+  // REQ-B4: Verify config object is not mutated during validation
+  it("should not mutate original config object during validation", () => {
+    const originalConfig: InitConfiguration = {
+      domain: "auth.example.com",
+      baseURL: "https://app.example.com",
+      clientID: "test-client-id",
+      clientSecret: "test",
+      session: {
+        secret: "test encryption key fdsgfds gfds ",
+        cookie: {
+          secure: undefined, // Will be defaulted to true
+        },
+      },
+    };
+
+    // Store original state
+    const originalSecureValue = originalConfig.session?.cookie?.secure;
+
+    // Parse configuration (should apply defaults)
+    parseConfiguration(originalConfig);
+
+    // Verify input object was not mutated
+    expect(originalConfig.session?.cookie?.secure).toBe(originalSecureValue);
+    expect(originalConfig.session?.cookie?.secure).toBeUndefined();
+  });
+
+  it("should not accumulate mutations across multiple validations", () => {
+    const config: InitConfiguration = {
+      domain: "auth.example.com",
+      baseURL: "https://app.example.com",
+      clientID: "test-client-id",
+      clientSecret: "test",
+      session: {
+        secret: "test encryption key fdsgfds gfds ",
+        cookie: {
+          secure: undefined,
+        },
+      },
+    };
+
+    // First validation
+    const result1 = parseConfiguration(config);
+
+    // Second validation with same config object
+    const result2 = parseConfiguration(config);
+
+    // Both results should have same secure value (no accumulated mutations)
+    expect(result1.session.cookie.secure).toBe(result2.session.cookie.secure);
+    expect(result1.session.cookie.secure).toBe(true); // Should be defaulted
+  });
+
   it("should not allow custom routes to be set to relative paths", () => {
     const config: InitConfiguration = {
       domain: "auth.example.com",
@@ -99,6 +150,7 @@ describe("Configuration Parser", () => {
       domain: "auth.example.com",
       baseURL: "https://app.example.com",
       clientID: "test-client-id",
+      clientSecret: "test-secret",
       session: {
         secret: "test encryption key fdsgfds gfds ",
         cookie: {

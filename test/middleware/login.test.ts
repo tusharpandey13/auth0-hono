@@ -307,4 +307,91 @@ describe("login middleware", () => {
       );
     });
   });
+
+  // REQ-A3: Handle duplicate query parameters (array handling)
+  describe("when query parameter appears multiple times (duplicate/array)", () => {
+    beforeEach(async () => {
+      // Mock query() to return an array (duplicate parameters)
+      mockContext.req.query = vi.fn().mockImplementation((param) => {
+        if (param === "ui_locales") {
+          return ["en", "fr"]; // Array indicates multiple values
+        }
+        return null;
+      });
+
+      mockConfiguration.forwardAuthorizationParams = ["ui_locales"];
+
+      await login()(mockContext, nextFn);
+    });
+
+    it("should normalize duplicate query params to string (first value)", () => {
+      const authParams =
+        mockClient.startInteractiveLogin.mock.calls[0][0].authorizationParams;
+
+      // Should be string, not array
+      expect(authParams.ui_locales).toBe("en");
+      expect(typeof authParams.ui_locales).toBe("string");
+      expect(Array.isArray(authParams.ui_locales)).toBe(false);
+    });
+
+    it("should not pass array to authorization params", () => {
+      const authParams =
+        mockClient.startInteractiveLogin.mock.calls[0][0].authorizationParams;
+
+      // Ensure no [object Object] conversion
+      expect(authParams.ui_locales).not.toEqual(["en", "fr"]);
+    });
+  });
+
+  describe("when query parameter is a single value (string)", () => {
+    beforeEach(async () => {
+      mockContext.req.query = vi.fn().mockImplementation((param) => {
+        if (param === "ui_locales") {
+          return "en";
+        }
+        return null;
+      });
+
+      mockConfiguration.forwardAuthorizationParams = ["ui_locales"];
+
+      await login()(mockContext, nextFn);
+    });
+
+    it("should pass single value as-is", () => {
+      const authParams =
+        mockClient.startInteractiveLogin.mock.calls[0][0].authorizationParams;
+
+      expect(authParams.ui_locales).toBe("en");
+      expect(typeof authParams.ui_locales).toBe("string");
+    });
+  });
+
+  describe("when mixed single and multi-value params are provided", () => {
+    beforeEach(async () => {
+      mockContext.req.query = vi.fn().mockImplementation((param) => {
+        const params: Record<string, string | string[]> = {
+          ui_locales: ["en", "fr"], // Array
+          scope: "openid profile", // String
+        };
+        return params[param] || null;
+      });
+
+      mockConfiguration.forwardAuthorizationParams = ["ui_locales", "scope"];
+
+      await login()(mockContext, nextFn);
+    });
+
+    it("should handle both array and string params correctly", () => {
+      const authParams =
+        mockClient.startInteractiveLogin.mock.calls[0][0].authorizationParams;
+
+      // Array param should be normalized to first value
+      expect(authParams.ui_locales).toBe("en");
+      expect(typeof authParams.ui_locales).toBe("string");
+
+      // String param should pass through
+      expect(authParams.scope).toBe("openid profile");
+      expect(typeof authParams.scope).toBe("string");
+    });
+  });
 });

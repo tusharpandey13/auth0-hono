@@ -2,13 +2,28 @@ import { getClient, ensureClient } from '@/config/index.js'
 import { createRouteUrl, toSafeRedirect } from '@/utils/util.js'
 import { mapServerError } from '@/errors/errorMap.js'
 import { Auth0Error } from '@/errors/Auth0Error.js'
-import { persistSession } from '@/helpers/session.js'
 import { Next, MiddlewareHandler } from 'hono'
 import { createMiddleware } from 'hono/factory'
 import { OIDCEnv } from '@/lib/honoEnv.js'
 import { resumeSilentLogin } from './silentLogin.js'
-import { SessionData } from '@auth0/auth0-server-js'
+import { SessionData, StateData, StateStore } from '@auth0/auth0-server-js'
+import { STATE_STORE_KEY } from '@/lib/constants.js'
 import { Configuration } from '@/config/Configuration.js'
+import { Context } from 'hono'
+
+/**
+ * Get the state store and cookie identifier from context.
+ *
+ * @param c - Hono context
+ * @param configuration - Auth0 configuration with session settings
+ * @returns Object containing stateStore and identifier
+ * @internal
+ */
+function getStateStoreContext(c: Context, configuration: Configuration) {
+  const stateStore = c.get(STATE_STORE_KEY) as StateStore<Context>
+  const identifier = configuration.session.cookie?.name ?? 'appSession'
+  return { stateStore, identifier }
+}
 
 export type CallbackParams = {
   /**
@@ -65,7 +80,24 @@ export const callback = (params: CallbackParams = {}) => {
           // If hook returns enriched session (different object), persist it
           if (hookResult && hookResult !== session) {
             session = hookResult as SessionData
-            await persistSession(c, session)
+            // Read raw StateData from store (preserves internal.createdAt)
+            // then merge hook's enriched fields onto it for persistence.
+            const { stateStore, identifier } = getStateStoreContext(c, configuration)
+            const rawState = await stateStore.get(identifier, c) as StateData | null
+
+            if (rawState) {
+              // SAFETY: Explicitly preserve internal field after hook enrichment
+              // This prevents the hook from overwriting the session's internal metadata
+              const enrichedState = { ...rawState, ...session, internal: rawState.internal }
+              await stateStore.set(identifier, enrichedState, false, c)
+            } else {
+              // Race condition: session cleared between login and hook execution
+              // Log warning so operators detect session store issues
+              configuration.debug(
+                'Warning: Hook enrichment discarded due to missing session state after successful login. ' +
+                'This may indicate a race condition in your state store.'
+              );
+            }
           }
           // void/undefined: use default behavior
         } catch (hookErr) {

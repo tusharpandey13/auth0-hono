@@ -1,10 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Context } from 'hono'
 import { describe, expect, it, beforeEach } from 'vitest'
-import { claimEquals } from '../../src/middleware/claimEquals'
-import { claimIncludes } from '../../src/middleware/claimIncludes'
-import { claimCheck } from '../../src/middleware/claimCheck'
+import { claimEquals, claimIncludes, claimCheck } from '../../src/middleware/claims'
 import { Auth0Error } from '../../src/errors/Auth0Error'
+import { createMockContext } from '../fixtures'
 
 describe('claimEquals middleware', () => {
   let mockContext: Context
@@ -12,17 +11,7 @@ describe('claimEquals middleware', () => {
 
   beforeEach(() => {
     mockNext = async () => 'next-called'
-    mockContext = {
-      var: { auth0: { user: null } },
-      set: function (key: string, value: any) {
-        if (!this.var) this.var = {}
-        this.var[key] = value
-        return value
-      },
-      get: function (key: string) {
-        return this.var?.[key]
-      },
-    } as any
+    mockContext = createMockContext()
   })
 
   describe('claim matching', () => {
@@ -114,17 +103,7 @@ describe('claimIncludes middleware', () => {
 
   beforeEach(() => {
     mockNext = async () => 'next-called'
-    mockContext = {
-      var: { auth0: { user: null } },
-      set: function (key: string, value: any) {
-        if (!this.var) this.var = {}
-        this.var[key] = value
-        return value
-      },
-      get: function (key: string) {
-        return this.var?.[key]
-      },
-    } as any
+    mockContext = createMockContext()
   })
 
   describe('array claim inclusion', () => {
@@ -226,17 +205,7 @@ describe('claimCheck middleware', () => {
 
   beforeEach(() => {
     mockNext = async () => 'next-called'
-    mockContext = {
-      var: { auth0: { user: null } },
-      set: function (key: string, value: any) {
-        if (!this.var) this.var = {}
-        this.var[key] = value
-        return value
-      },
-      get: function (key: string) {
-        return this.var?.[key]
-      },
-    } as any
+    mockContext = createMockContext()
   })
 
   describe('predicate function evaluation', () => {

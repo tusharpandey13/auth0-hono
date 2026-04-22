@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { getAccessToken } from '../../src/helpers/getAccessToken'
 import { TokenSet } from '@auth0/auth0-server-js'
 import { REFRESH_CACHE_KEY } from '../../src/lib/constants'
+// Shared fixtures available at ../fixtures if needed
 
 // Mock getClient
 vi.mock('../../src/config/index', () => ({

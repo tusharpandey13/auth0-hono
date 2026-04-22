@@ -1,10 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Context } from 'hono'
 import { describe, expect, it, beforeEach, afterEach, vi, Mock } from 'vitest'
 import { TokenSet } from '@auth0/auth0-server-js'
 import { getAccessToken } from '../../src/helpers/getAccessToken'
 import { REFRESH_CACHE_KEY, SESSION_CACHE_KEY } from '../../src/lib/constants'
 import { InvalidGrantError, TokenRefreshError } from '../../src/errors'
+import { Auth0Error } from '../../src/errors/Auth0Error'
+import { createMockContext, createMockClient } from '../fixtures'
 
 // Mock dependencies
 vi.mock('../../src/config/index.js', () => ({
@@ -12,14 +13,19 @@ vi.mock('../../src/config/index.js', () => ({
 }))
 
 vi.mock('../../src/errors/errorMap.js', () => ({
-  mapServerError: vi.fn((err) => {
-    if ((err as any)?.code === 'invalid_grant' || (err as any)?.cause?.error === 'invalid_grant') {
+  mapServerError: vi.fn((err: unknown): Auth0Error => {
+    // Auth0Error instances pass through unchanged
+    if (err instanceof Auth0Error) {
+      return err
+    }
+    const errorObj = err as { code?: string }
+    if (errorObj?.code === 'invalid_grant' || (err as any)?.cause?.error === 'invalid_grant') {
       return new InvalidGrantError('The refresh token is invalid or expired.', err)
     }
-    if ((err as any)?.code === 'token_by_refresh_token_error') {
+    if (errorObj?.code === 'token_by_refresh_token_error') {
       return new TokenRefreshError('Failed to refresh access token.', err)
     }
-    return err
+    return err as Auth0Error
   }),
 }))
 
@@ -33,16 +39,12 @@ describe('getAccessToken(c, options?)', () => {
     vi.clearAllMocks()
 
     // Create mock context with get/set methods
-    mockContext = {
-      var: { auth0: {} },
-      get: vi.fn(),
-      set: vi.fn(),
-    } as any as Context
+    mockContext = createMockContext()
 
     // Create mock client
-    mockClient = {
+    mockClient = createMockClient({
       getAccessToken: vi.fn(),
-    }
+    })
 
     // Setup getClient mock
     ;(getClient as Mock).mockReturnValue({

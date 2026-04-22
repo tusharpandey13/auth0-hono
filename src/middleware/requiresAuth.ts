@@ -3,7 +3,7 @@ import { OIDCEnv } from "@/lib/honoEnv.js";
 import { Context, Next } from "hono";
 import { accepts } from "hono/accepts";
 import { login } from "./login.js";
-import { LoginRequiredError } from '@/errors/errors.js';
+import { LoginRequiredError } from '@/errors/index.js';
 
 type OnRequiredAuth = "error" | "login";
 /**

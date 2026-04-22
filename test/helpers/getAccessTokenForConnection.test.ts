@@ -1,9 +1,10 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Context } from 'hono'
 import { describe, expect, it, beforeEach, afterEach, vi, Mock } from 'vitest'
 import { ConnectionTokenSet } from '@auth0/auth0-server-js'
 import { getAccessTokenForConnection } from '../../src/helpers/getAccessTokenForConnection'
 import { ConnectionTokenError } from '../../src/errors'
+import { Auth0Error } from '../../src/errors/Auth0Error'
+import { createMockContext, createMockClient } from '../fixtures'
 
 // Mock dependencies
 vi.mock('../../src/config/index.js', () => ({
@@ -11,11 +12,16 @@ vi.mock('../../src/config/index.js', () => ({
 }))
 
 vi.mock('../../src/errors/errorMap.js', () => ({
-  mapServerError: vi.fn((err) => {
-    if ((err as any)?.code === 'token_for_connection_error') {
+  mapServerError: vi.fn((err: unknown): Auth0Error => {
+    // Auth0Error instances pass through unchanged
+    if (err instanceof Auth0Error) {
+      return err
+    }
+    const errorObj = err as { code?: string }
+    if (errorObj?.code === 'token_for_connection_error') {
       return new ConnectionTokenError('Failed to get token for connection.', err)
     }
-    return err
+    return err as Auth0Error
   }),
 }))
 
@@ -29,16 +35,12 @@ describe('getAccessTokenForConnection(c, options)', () => {
     vi.clearAllMocks()
 
     // Create mock context
-    mockContext = {
-      var: { auth0: {} },
-      get: vi.fn(),
-      set: vi.fn(),
-    } as any as Context
+    mockContext = createMockContext()
 
     // Create mock client
-    mockClient = {
+    mockClient = createMockClient({
       getAccessTokenForConnection: vi.fn(),
-    }
+    })
 
     // Setup getClient mock
     ;(getClient as Mock).mockReturnValue({

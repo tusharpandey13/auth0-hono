@@ -3,6 +3,7 @@ import { Context } from 'hono'
 import { describe, expect, it, beforeEach } from 'vitest'
 import { requiresOrg } from '../../src/middleware/requiresOrg'
 import { Auth0Error } from '../../src/errors/Auth0Error'
+import { createMockContext } from '../fixtures'
 
 describe('requiresOrg middleware', () => {
   let mockContext: Context
@@ -10,17 +11,7 @@ describe('requiresOrg middleware', () => {
 
   beforeEach(() => {
     mockNext = async () => 'next-called'
-    mockContext = {
-      var: { auth0: { user: null } },
-      set: function (key: string, value: any) {
-        if (!this.var) this.var = {}
-        this.var[key] = value
-        return value
-      },
-      get: function (key: string) {
-        return this.var?.[key]
-      },
-    } as any
+    mockContext = createMockContext()
   })
 
   describe('organization membership', () => {

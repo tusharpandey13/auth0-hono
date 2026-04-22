@@ -1,30 +1,17 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Hono } from 'hono'
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { claimEquals, claimIncludes, claimCheck, requiresOrg } from '../../src/middleware'
-import { Auth0User } from '../../src/types/auth0'
+import { claimEquals, claimIncludes, requiresOrg } from '../../src/middleware'
+import { Auth0User, Auth0Context } from '../../src/types/auth0'
 
-// Mock getClient for standalone middleware
-vi.mock('../../src/config/index', () => ({
-  getClient: vi.fn((c) => ({
-    client: c.get('mockClient'),
-    configuration: { baseURL: 'https://app.test.com' },
-  })),
-  ensureClient: vi.fn(),
-}))
-
-// Mock error mapping
-vi.mock('../../src/errors/errorMap', () => ({
-  mapServerError: (err: any) => err,
-}))
-
-describe('Authorization Flows (Claims & Organization)', () => {
-  let mockContext: any
+describe('Authorization Flows (HTTP Layer)', () => {
   let mockUser: Auth0User
+  let auth0Context: Auth0Context
 
   beforeEach(() => {
     vi.clearAllMocks()
 
+    // Default mock user with various claims
     mockUser = {
       sub: 'auth0|123',
       email: 'test@example.com',
@@ -36,21 +23,10 @@ describe('Authorization Flows (Claims & Organization)', () => {
       role: 'admin',
     } as Auth0User
 
-    mockContext = {
-      var: {
-        auth0: {
-          user: mockUser,
-          session: { user: mockUser },
-          org: { id: 'org_123', name: 'Test Org' },
-        },
-      },
-      get: vi.fn((key: string) => mockContext.vars[key]),
-      set: vi.fn((key: string, value: any) => {
-        mockContext.vars[key] = value
-      }),
-      vars: {},
-      json: vi.fn((data) => ({ status: 200, body: data })),
-      text: vi.fn((data) => ({ status: 200, body: data })),
+    auth0Context = {
+      user: mockUser,
+      session: { user: mockUser } as any,
+      org: { id: 'org_123', name: 'Test Org' },
     }
   })
 
@@ -58,260 +34,200 @@ describe('Authorization Flows (Claims & Organization)', () => {
     vi.clearAllMocks()
   })
 
-  it('should allow matching claim with claimEquals', async () => {
-    // User has role: admin, middleware requires admin
-    const middleware = claimEquals('role', 'admin')
-
-    let middlewarePassed = false
-    const next = vi.fn().mockImplementation(() => {
-      middlewarePassed = true
-      return Promise.resolve(undefined)
-    })
-
-    await middleware(mockContext, next)
-
-    expect(middlewarePassed).toBe(true)
-    expect(next).toHaveBeenCalled()
-  })
-
-  it('should block mismatched claim with claimEquals', async () => {
-    // User has role: admin, middleware requires user role
-    const middleware = claimEquals('role', 'user')
-
-    const next = vi.fn()
-    let error: any
-
-    try {
-      await middleware(mockContext, next)
-    } catch (err) {
-      error = err
-    }
-
-    expect(error).toBeDefined()
-    expect(error?.code).toBe('insufficient_claims')
-    expect(next).not.toHaveBeenCalled()
-  })
-
-  it('should allow matching array with claimIncludes', async () => {
-    // User has permissions: ["read:data", "write:data"]
-    const middleware = claimIncludes('permissions', 'read:data')
-
-    let middlewarePassed = false
-    const next = vi.fn().mockImplementation(() => {
-      middlewarePassed = true
-      return Promise.resolve(undefined)
-    })
-
-    await middleware(mockContext, next)
-
-    expect(middlewarePassed).toBe(true)
-    expect(next).toHaveBeenCalled()
-  })
-
-  it('should block missing array value with claimIncludes', async () => {
-    // User permissions don't include "delete:data"
-    const middleware = claimIncludes('permissions', 'delete:data')
-
-    const next = vi.fn()
-    let error: any
-
-    try {
-      await middleware(mockContext, next)
-    } catch (err) {
-      error = err
-    }
-
-    expect(error).toBeDefined()
-    expect(error?.code).toBe('insufficient_claims')
-    expect(next).not.toHaveBeenCalled()
-  })
-
-  it('should support variadic values in claimIncludes (ANY match passes)', async () => {
-    // User has role: admin (in any position)
-    const middleware = claimIncludes('permissions', 'delete:data', 'read:data', 'admin')
-
-    let middlewarePassed = false
-    const next = vi.fn().mockImplementation(() => {
-      middlewarePassed = true
-      return Promise.resolve(undefined)
-    })
-
-    await middleware(mockContext, next)
-
-    expect(middlewarePassed).toBe(true)
-    expect(next).toHaveBeenCalled()
-  })
-
-  it('should allow custom check function with claimCheck', async () => {
-    // Custom check: user is email verified
-    const middleware = claimCheck((user) => user.email_verified === true)
-
-    let middlewarePassed = false
-    const next = vi.fn().mockImplementation(() => {
-      middlewarePassed = true
-      return Promise.resolve(undefined)
-    })
-
-    await middleware(mockContext, next)
-
-    expect(middlewarePassed).toBe(true)
-    expect(next).toHaveBeenCalled()
-  })
-
-  it('should block custom check returning false', async () => {
-    // Custom check: user is NOT verified
-    const middleware = claimCheck((user) => user.email_verified === false)
-
-    const next = vi.fn()
-    let error: any
-
-    try {
-      await middleware(mockContext, next)
-    } catch (err) {
-      error = err
-    }
-
-    expect(error).toBeDefined()
-    expect(error?.code).toBe('insufficient_claims')
-    expect(next).not.toHaveBeenCalled()
-  })
-
-  it('should allow org_id match with requiresOrg', async () => {
-    // User org_id matches required org
-    const middleware = requiresOrg({ orgId: 'org_123' })
-
-    let middlewarePassed = false
-    const next = vi.fn().mockImplementation(() => {
-      middlewarePassed = true
-      return Promise.resolve(undefined)
-    })
-
-    await middleware(mockContext, next)
-
-    expect(middlewarePassed).toBe(true)
-    expect(next).toHaveBeenCalled()
-  })
-
-  it('should block organization mismatch with requiresOrg', async () => {
-    // User org_id doesn't match required org
-    const middleware = requiresOrg({ orgId: 'org_456' })
-
-    const next = vi.fn()
-    let error: any
-
-    try {
-      await middleware(mockContext, next)
-    } catch (err) {
-      error = err
-    }
-
-    expect(error).toBeDefined()
-    expect(error?.code).toBe('organization_mismatch')
-    expect(next).not.toHaveBeenCalled()
-  })
-
-  it('should support custom org check function', async () => {
-    // Custom check: org_id starts with org_
-    const middleware = requiresOrg((c) => {
-      const orgId = c.var.auth0?.user?.org_id
-      return orgId && orgId.startsWith('org_')
-    })
-
-    let middlewarePassed = false
-    const next = vi.fn().mockImplementation(() => {
-      middlewarePassed = true
-      return Promise.resolve(undefined)
-    })
-
-    await middleware(mockContext, next)
-
-    expect(middlewarePassed).toBe(true)
-    expect(next).toHaveBeenCalled()
-  })
-
-  it('should chain middleware all passing', async () => {
-    // Setup: requiresAuth pass, claimIncludes pass, requiresOrg pass
+  /**
+   * Helper to create an app with mocked auth context
+   */
+  function createAuthenticatedApp() {
     const app = new Hono()
 
+    // Middleware to populate auth context (simulates auth0() + getCachedSession)
     app.use('*', (c, next) => {
-      // Simulate auth0() middleware
-      c.var.auth0 = {
-        user: mockUser,
-        session: { user: mockUser },
-        org: { id: 'org_123', name: 'Test Org' },
-      }
+      c.set('auth0', { ...auth0Context })
       return next()
     })
 
-    app.get('/admin/data', claimIncludes('permissions', 'read:data'))
-    app.get('/admin/data', requiresOrg({ orgId: 'org_123' }))
-    app.get('/admin/data', (c) => {
+    return app
+  }
+
+  /**
+   * Helper to create an app with customizable auth context
+   */
+  function createAppWithContext(contextOverride: Partial<Auth0Context>) {
+    const app = new Hono()
+
+    app.use('*', (c, next) => {
+      c.set('auth0', { ...auth0Context, ...contextOverride })
+      return next()
+    })
+
+    return app
+  }
+
+  it('should allow full middleware chain when all checks pass', async () => {
+    const app = createAuthenticatedApp()
+
+    app.use('/protected', claimIncludes('permissions', 'read:data'))
+
+    app.get('/protected', (c) => {
+      return c.json({ success: true, data: 'protected content' })
+    })
+
+    const res = await app.request('http://localhost/protected')
+
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.success).toBe(true)
+    expect(body.data).toBe('protected content')
+  })
+
+  it('should short-circuit on claim mismatch with 403 OAuth2 error', async () => {
+    const app = createAuthenticatedApp()
+
+    app.use('/admin', claimEquals('role', 'superadmin')) // User has 'admin', not 'superadmin'
+
+    app.get('/admin', (c) => {
+      return c.json({ admin: true })
+    })
+
+    const res = await app.request('http://localhost/admin')
+
+    expect(res.status).toBe(403)
+    expect(res.headers.get('content-type')).toBe('application/json')
+
+    const body = await res.json()
+    expect(body.error).toBe('insufficient_claims')
+    expect(body.error_description).toBeDefined()
+    expect(typeof body.error_description).toBe('string')
+  })
+
+  it('should short-circuit on org mismatch with 403 error', async () => {
+    const app = createAuthenticatedApp()
+
+    app.use('/org', requiresOrg({ orgId: 'org_999' })) // User has 'org_123'
+
+    app.get('/org', (c) => {
+      return c.json({ org: c.var.auth0?.org })
+    })
+
+    const res = await app.request('http://localhost/org')
+
+    expect(res.status).toBe(403)
+    expect(res.headers.get('content-type')).toBe('application/json')
+
+    const body = await res.json()
+    expect(body.error).toBe('organization_mismatch')
+    expect(body.error_description).toBeDefined()
+  })
+
+  it('should verify OAuth2 error format structure on all 403 responses', async () => {
+    const app = createAuthenticatedApp()
+
+    app.use('/protected', claimEquals('permission', 'admin:write'))
+
+    app.get('/protected', (c) => {
       return c.json({ data: 'secret' })
     })
 
-    expect(app).toBeDefined()
+    const res = await app.request('http://localhost/protected')
+
+    expect(res.status).toBe(403)
+
+    const body = await res.json()
+
+    // Verify OAuth2 error format
+    expect(body).toHaveProperty('error')
+    expect(body).toHaveProperty('error_description')
+    expect(body.error).toMatch(/^[a-z_]+$/) // error codes are snake_case
+    expect(body.error_description).toBeTruthy()
+
+    // Verify no leaking of technical details
+    expect(body).not.toHaveProperty('code')
+    expect(body).not.toHaveProperty('message')
+    expect(body).not.toHaveProperty('stack')
+
+    // Verify Content-Type header
+    expect(res.headers.get('content-type')).toBe('application/json')
   })
 
-  it('should short-circuit middleware chain on failure', async () => {
-    // Setup: requiresAuth pass, claimIncludes FAIL, requiresOrg should not run
-    const app = new Hono()
+  it('should allow different users with different claims through same chain', async () => {
+    // User with different permissions
+    const customContext: Auth0Context = {
+      user: { ...mockUser, permissions: ['read:reports', 'write:data'] } as Auth0User,
+      session: null,
+      org: null,
+    }
 
-    app.use('*', (c, next) => {
-      // Simulate auth0() middleware
-      c.var.auth0 = {
-        user: mockUser,
-        session: { user: mockUser },
-        org: { id: 'org_123', name: 'Test Org' },
-      }
-      return next()
+    const app = createAppWithContext(customContext)
+
+    app.use('/api/reports', claimIncludes('permissions', 'read:reports'))
+
+    app.get('/api/reports', (c) => {
+      const perms = c.var.auth0?.user?.permissions || []
+      return c.json({ allowed: true, permissions: perms })
     })
 
-    // First middleware fails
-    app.get('/reports', claimIncludes('permissions', 'delete:data'))
+    const res = await app.request('http://localhost/api/reports')
 
-    // This should not be reached
-    app.get('/reports', () => {
-      return new Response(JSON.stringify({ data: 'secret' }))
-    })
-
-    expect(app).toBeDefined()
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.allowed).toBe(true)
+    expect(body.permissions).toContain('read:reports')
   })
 
-  it('should verify error codes on authorization failures', async () => {
-    const errorCodes: Record<string, { middleware: any; context: any }> = {
-      insufficient_claims: {
-        middleware: claimEquals('role', 'unauthorized'),
-        context: mockContext,
-      },
-      organization_mismatch: {
-        middleware: requiresOrg({ orgId: 'org_999' }),
-        context: mockContext,
-      },
-      missing_organization: {
-        middleware: requiresOrg({ orgId: 'org_123' }),
-        context: {
-          var: {
-            auth0: {
-              user: { sub: 'auth0|456', email: 'noorg@test.com' }, // No org_id
-              session: null,
-              org: null,
-            },
-          },
-        },
-      },
+  it('should allow claimIncludes with variadic values (ANY match)', async () => {
+    const customContext: Auth0Context = {
+      user: { ...mockUser, permissions: ['read:data'] } as Auth0User,
+      session: null,
+      org: null,
     }
 
-    for (const [expectedCode, testCase] of Object.entries(errorCodes)) {
-      let caughtError: any
-      try {
-        await testCase.middleware(testCase.context, vi.fn())
-      } catch (err) {
-        caughtError = err
-      }
+    const app = createAppWithContext(customContext)
 
-      if (caughtError && expectedCode !== 'missing_organization') {
-        expect(caughtError?.code).toBe(expectedCode)
-      }
-    }
+    app.use('/api/data', claimIncludes('permissions', 'delete:data', 'read:data', 'write:data'))
+
+    app.get('/api/data', (c) => {
+      return c.json({ accessible: true })
+    })
+
+    const res = await app.request('http://localhost/api/data')
+
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.accessible).toBe(true)
+  })
+
+  it('should allow nested middleware chains with multiple claims checks', async () => {
+    const app = createAuthenticatedApp()
+
+    app.use('/api/admin', claimEquals('role', 'admin'))
+    app.use('/api/admin', claimIncludes('permissions', 'write:data'))
+
+    app.get('/api/admin', (c) => {
+      return c.json({ admin: true, data: 'restricted' })
+    })
+
+    const res = await app.request('http://localhost/api/admin')
+
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body.admin).toBe(true)
+  })
+
+  it('should fail on first middleware in chain when permission missing', async () => {
+    const app = createAuthenticatedApp()
+
+    app.use('/api/admin', claimEquals('role', 'admin')) // Passes: user has role='admin'
+    app.use('/api/admin', claimIncludes('permissions', 'admin:delete')) // Fails: user doesn't have this
+
+    app.get('/api/admin', (c) => {
+      return c.json({ admin: true })
+    })
+
+    const res = await app.request('http://localhost/api/admin')
+
+    expect(res.status).toBe(403)
+
+    const body = await res.json()
+    expect(body.error).toBe('insufficient_claims')
   })
 })

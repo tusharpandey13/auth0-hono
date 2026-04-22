@@ -9,13 +9,11 @@ import { mapServerError } from '@/errors/errorMap.js'
 export interface GetAccessTokenForConnectionOptions {
   /**
    * Connection name (e.g., 'google-oauth2', 'facebook', 'github').
-   * Identifies which social provider to get a token for.
    */
   connection: string
 
   /**
-   * Optional login hint to help the provider identify which account to use.
-   * For example, the user's email address on that provider.
+   * Optional login hint to help identify which account to use.
    */
   loginHint?: string
 }

@@ -4,22 +4,14 @@ import { SESSION_CACHE_KEY } from '@/lib/constants.js'
 import { getClient } from '@/config/index.js'
 
 /**
- * Get session from request-scoped cache, or load from server-js client and cache.
- *
- * Avoids duplicate cookie parse + AES decrypt operations within a single request.
- * If client.getSession throws, the error propagates and cache remains unset,
- * allowing retry on next request.
- *
+ * Get session from cache or load from server-js client.
  * @param c - Hono context
  * @returns SessionData or null if no active session
- * @throws Auth0Error if client initialization fails
  * @internal
  */
 export async function getCachedSession(c: Context): Promise<SessionData | null> {
   // Check cache first
-  // TypeScript cannot resolve const string keys against ContextVariableMap augmentation
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const cached = (c as any).get(SESSION_CACHE_KEY)
+  const cached = c.get('__auth0_session_cache')
   if (cached !== undefined) {
     return cached as SessionData | null // Cache hit (including null for "no session" case)
   }
@@ -29,9 +21,7 @@ export async function getCachedSession(c: Context): Promise<SessionData | null> 
   const session = (await client.getSession(c)) ?? null
 
   // Store in cache (including null)
-  // TypeScript cannot resolve const string keys against ContextVariableMap augmentation
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ;(c as any).set(SESSION_CACHE_KEY, session)
+  c.set('__auth0_session_cache', session)
 
   return session
 }
@@ -46,4 +36,28 @@ export async function getCachedSession(c: Context): Promise<SessionData | null> 
  */
 export function invalidateSessionCache(c: Context): void {
   c.set(SESSION_CACHE_KEY, undefined)
+}
+
+/**
+ * Get the current session or null if not authenticated.
+ *
+ * Public API helper that returns the full session data including tokens.
+ * Never throws on unauthenticated requests. Uses request-scoped caching
+ * to avoid redundant cookie parse + decrypt operations.
+ *
+ * @param c - Hono context
+ * @returns SessionData with user, tokens, and custom fields, or null
+ *
+ * @example
+ * ```typescript
+ * const session = await getSession(c)
+ * if (session) {
+ *   console.log(session.user.email)      // 'user@example.com'
+ *   console.log(session.idToken)         // JWT string or undefined
+ *   console.log(session['custom_field']) // enriched fields
+ * }
+ * ```
+ */
+export async function getSession(c: Context): Promise<SessionData | null> {
+  return getCachedSession(c)
 }

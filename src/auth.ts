@@ -17,7 +17,6 @@ import {
 import { getCachedSession } from '@/helpers/sessionCache.js'
 import { Auth0Context, Auth0User, Auth0Organization, Auth0Session } from '@/types/auth0.js'
 import { mapServerError } from '@/errors/errorMap.js'
-import { STATE_STORE_KEY, SESSION_CACHE_KEY } from '@/lib/constants.js'
 import { PartialConfig } from '@/config/envConfig.js'
 import { Configuration } from '@/config/Configuration.js'
 
@@ -77,9 +76,7 @@ export function auth0(initConfig: PartialConfig = {}): MiddlewareHandler {
         // === SET CONTEXT VARIABLES ===
         c.set('auth0Client', serverClient)
         c.set('auth0Configuration', config)
-        // TypeScript cannot resolve const string keys against ContextVariableMap augmentation
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ;(c as any).set(STATE_STORE_KEY, stateStore)
+        c.set('__auth0_state_store', stateStore)
 
         // === ROUTE HANDLING ===
         // Check if this request matches a mounted auth route
@@ -130,9 +127,7 @@ export function auth0(initConfig: PartialConfig = {}): MiddlewareHandler {
         const session = await getCachedSession(c)
 
         // Ensure cache is set (getCachedSession should do this, but be explicit)
-        // TypeScript cannot resolve const string keys against ContextVariableMap augmentation
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ;(c as any).set(SESSION_CACHE_KEY, session ?? null)
+        c.set('__auth0_session_cache', session ?? null)
 
         // Populate c.var.auth0 with user, session, org
         const user = session?.user ?? null

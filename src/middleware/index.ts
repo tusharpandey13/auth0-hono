@@ -20,7 +20,5 @@ export {
 } from './silentLogin.js'
 
 // Authorization middleware
-export { claimEquals } from "./claimEquals.js";
-export { claimIncludes } from "./claimIncludes.js";
-export { claimCheck } from "./claimCheck.js";
+export { claimEquals, claimIncludes, claimCheck } from "./claims.js";
 export { requiresOrg } from "./requiresOrg.js";

@@ -6,7 +6,7 @@ import {
   MissingTransactionError,
   TokenRefreshError,
   ConnectionTokenError,
-} from './errors.js'
+} from './index.js'
 
 /**
  * Maps @auth0/auth0-server-js error codes to SDK error classes.

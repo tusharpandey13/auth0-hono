@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { callback } from '../../src/middleware/callback'
 import { SessionData } from '@auth0/auth0-server-js'
 import { Auth0Error } from '../../src/errors/Auth0Error'
+import { createMockContext, createMockClient, createMockConfig, createMockSession } from '../fixtures'
 
 // Mock dependencies
 vi.mock('../../src/config/index', () => ({
@@ -17,7 +18,7 @@ vi.mock('../../src/utils/util', () => ({
   toSafeRedirect: vi.fn((url) => url),
 }))
 
-vi.mock('../../src/helpers/persistSession', () => ({
+vi.mock('../../src/helpers/session', () => ({
   persistSession: vi.fn(),
 }))
 
@@ -42,65 +43,39 @@ describe('onCallback Hook', () => {
   beforeEach(() => {
     vi.clearAllMocks()
 
-    mockSession = {
+    mockSession = createMockSession({
       user: {
         sub: 'auth0|123',
         email: 'test@example.com',
         name: 'Test User',
         email_verified: true,
       },
-      idToken: 'id_token_xxx',
-      refreshToken: 'refresh_token_xxx',
-      tokenSets: {
-        default: {
-          accessToken: 'access_token_xxx',
-          audience: 'https://api.test.com',
-          scope: 'openid profile email',
-          expiresAt: Date.now() + 3600000,
-        },
-      },
-      internal: { sid: 'session_123', createdAt: Date.now() },
-    }
+    })
 
-    mockConfig = {
-      baseURL: 'https://app.test.com',
-      routes: { login: '/auth/login', callback: '/auth/callback' },
+    mockConfig = createMockConfig({
       onCallback: undefined, // Will be set per test
-    }
+    })
 
-    mockClient = {
+    mockClient = createMockClient({
       completeInteractiveLogin: vi.fn().mockResolvedValue({
         appState: { returnTo: '/dashboard' },
       }),
       getSession: vi.fn().mockResolvedValue(mockSession),
       logout: vi.fn(),
-    }
+    })
 
-    mockContext = {
+    mockContext = createMockContext({
       req: {
         url: 'https://app.test.com/auth/callback?code=test_code&state=test_state',
         method: 'GET',
       },
-      var: {},
-      get: vi.fn((key: string) => {
-        if (key === 'mockClient') return mockClient
-        if (key === 'mockConfig') return mockConfig
-        return mockContext.vars[key]
-      }),
-      set: vi.fn((key: string, value: any) => {
-        mockContext.vars[key] = value
-      }),
-      vars: {},
-      redirect: vi.fn((url) => {
-        return new Response('', { status: 302, headers: { location: url } })
-      }),
-      json: vi.fn((data) => {
-        return new Response(JSON.stringify(data), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        })
-      }),
-    }
+    })
+
+    mockContext.get = vi.fn((key: string) => {
+      if (key === 'mockClient') return mockClient
+      if (key === 'mockConfig') return mockConfig
+      return mockContext.vars[key]
+    })
   })
 
   afterEach(() => {
@@ -142,7 +117,7 @@ describe('onCallback Hook', () => {
     const callbackMiddleware = callback()
     const next = vi.fn()
 
-    const { persistSession } = await import('../../src/helpers/persistSession')
+    const { persistSession } = await import('../../src/helpers/session')
 
     await callbackMiddleware(mockContext, next)
 
@@ -313,7 +288,7 @@ describe('onCallback Hook', () => {
     const callbackMiddleware = callback()
     const next = vi.fn()
 
-    const { persistSession } = await import('../../src/helpers/persistSession')
+    const { persistSession } = await import('../../src/helpers/session')
 
     await callbackMiddleware(mockContext, next)
 

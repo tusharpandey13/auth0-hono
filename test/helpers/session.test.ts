@@ -1,10 +1,85 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Context } from 'hono'
-import { describe, expect, it, beforeEach, vi, afterEach } from 'vitest'
-import { persistSession } from '../../src/helpers/persistSession'
-import { STATE_STORE_KEY } from '../../src/lib/constants'
+import { describe, expect, it, beforeEach, afterEach, vi, Mock } from 'vitest'
+import { SessionData } from '@auth0/auth0-server-js'
+import { getUser, updateSession, persistSession } from '../../src/helpers/session'
+import { MissingSessionError } from '../../src/errors'
+import { SESSION_CACHE_KEY, STATE_STORE_KEY } from '../../src/lib/constants'
 
-describe('persistSession Helper', () => {
+// Mock dependencies
+vi.mock('../../src/helpers/sessionCache', () => ({
+  getCachedSession: vi.fn(),
+}))
+
+import { getCachedSession } from '../../src/helpers/sessionCache'
+
+describe('getUser(c)', () => {
+  let mockContext: any
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+
+    mockContext = {
+      var: { auth0: {} },
+    } as any as Context
+  })
+
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('should return user from c.var.auth0.user (synchronous)', () => {
+    const mockUser = {
+      sub: 'user123',
+      email: 'test@example.com',
+      name: 'Test User',
+    }
+
+    mockContext.var.auth0.user = mockUser
+
+    const result = getUser(mockContext)
+
+    expect(result).toEqual(mockUser)
+    expect(result.email).toBe('test@example.com')
+  })
+
+  it('should throw MissingSessionError when no user', () => {
+    mockContext.var.auth0.user = null
+
+    expect(() => getUser(mockContext)).toThrow(MissingSessionError)
+
+    // Verify the error description mentions the issue
+    try {
+      getUser(mockContext)
+    } catch (err) {
+      expect((err as any).description).toContain('getUser() called on an unauthenticated request')
+    }
+  })
+
+  it('should throw MissingSessionError when called on plain Context (c.var.auth0 undefined)', () => {
+    mockContext.var.auth0 = undefined
+
+    expect(() => getUser(mockContext)).toThrow(MissingSessionError)
+  })
+
+  it('should work after requiresAuth() middleware (user guaranteed)', () => {
+    const mockUser = {
+      sub: 'authenticated_user',
+      email: 'auth@example.com',
+      org_id: 'org_123',
+    }
+
+    // Simulate state after requiresAuth() middleware
+    mockContext.var.auth0.user = mockUser
+
+    const result = getUser(mockContext)
+
+    expect(result).toEqual(mockUser)
+    expect(result.org_id).toBe('org_123')
+  })
+})
+
+describe('persistSession', () => {
   let mockContext: Context
   let mockStateStore: any
   let mockConfig: any
@@ -348,5 +423,215 @@ describe('persistSession Helper', () => {
       expect(persistedSession.internal).toEqual(originalSession.internal)
       expect(persistedSession.newField).toBe('new value')
     })
+  })
+})
+
+describe('updateSession(c, data)', () => {
+  let mockContext: any
+  let mockStateStore: any
+  let mockConfig: any
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+
+    // Create mock context
+    mockStateStore = {
+      set: vi.fn().mockResolvedValue(undefined),
+    }
+
+    mockConfig = {
+      session: {
+        cookie: {
+          name: 'appSession',
+        },
+      },
+    }
+
+    mockContext = {
+      var: { auth0Configuration: mockConfig },
+      get: vi.fn(),
+      set: vi.fn(),
+    } as any as Context
+
+    mockContext.get.mockImplementation((key: string) => {
+      if (key === STATE_STORE_KEY) return mockStateStore
+      return undefined
+    })
+
+    mockContext.set.mockImplementation((key: string, value: any) => {
+      // Store in var for get to retrieve
+      mockContext.var[key] = value
+      return value
+    })
+  })
+
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('should merge data into existing session', async () => {
+    const existingSession: SessionData = {
+      user: { sub: 'user123', email: 'test@example.com' },
+      idToken: 'id_token',
+      refreshToken: 'refresh_token',
+      tokenSets: [],
+      connectionTokenSets: {},
+      internal: { sid: 'session_id', createdAt: Date.now() },
+      custom1: 'old_value',
+    } as any
+
+    ;(getCachedSession as Mock).mockResolvedValueOnce(existingSession)
+
+    await updateSession(mockContext, {
+      custom1: 'new_value',
+      custom2: 'added_value',
+    })
+
+    // Verify persistSession was called with merged data
+    expect(mockStateStore.set).toHaveBeenCalledWith(
+      'appSession',
+      expect.objectContaining({
+        custom1: 'new_value',
+        custom2: 'added_value',
+      }),
+      false,
+      mockContext
+    )
+
+    // Verify context was updated
+    expect(mockContext.set).toHaveBeenCalledWith(
+      SESSION_CACHE_KEY,
+      expect.objectContaining({
+        custom1: 'new_value',
+        custom2: 'added_value',
+      })
+    )
+  })
+
+  it('should filter reserved fields', async () => {
+    const existingSession: SessionData = {
+      user: { sub: 'user123' },
+      idToken: 'id_token',
+      refreshToken: 'refresh_token',
+      tokenSets: [],
+      connectionTokenSets: {},
+      internal: { sid: 'session_id', createdAt: Date.now() },
+      permissions: 'user',
+    } as any
+
+    ;(getCachedSession as Mock).mockResolvedValueOnce(existingSession)
+
+    // Try to override reserved fields
+    await updateSession(mockContext, {
+      user: 'hacker',
+      idToken: 'fake_token',
+      refreshToken: 'fake_refresh',
+      tokenSets: [],
+      connectionTokenSets: {},
+      internal: 'fake_internal',
+      permissions: 'admin',
+    })
+
+    // Verify only non-reserved fields were merged
+    expect(mockStateStore.set).toHaveBeenCalledWith(
+      'appSession',
+      expect.objectContaining({
+        user: existingSession.user, // Original preserved
+        idToken: existingSession.idToken, // Original preserved
+        refreshToken: existingSession.refreshToken, // Original preserved
+        tokenSets: existingSession.tokenSets, // Original preserved
+        connectionTokenSets: existingSession.connectionTokenSets, // Original preserved
+        internal: existingSession.internal, // Original preserved
+        permissions: 'admin', // Custom field allowed
+      }),
+      false,
+      mockContext
+    )
+  })
+
+  it('should throw MissingSessionError when no session', async () => {
+    ;(getCachedSession as Mock).mockResolvedValueOnce(null)
+
+    await expect(updateSession(mockContext, { foo: 'bar' })).rejects.toThrow(
+      MissingSessionError
+    )
+  })
+
+  it('should persist via retained stateStore and update c.var.auth0', async () => {
+    const existingSession: SessionData = {
+      user: {
+        sub: 'user123',
+        email: 'test@example.com',
+        org_id: 'org_123',
+        org_name: 'Test Org',
+      },
+      idToken: 'id_token',
+      refreshToken: 'refresh_token',
+      tokenSets: [],
+      connectionTokenSets: {},
+      internal: { sid: 'session_id', createdAt: Date.now() },
+    } as any
+
+    ;(getCachedSession as Mock).mockResolvedValueOnce(existingSession)
+
+    await updateSession(mockContext, { pref: 'dark' })
+
+    // Verify persistSession called with identifier and session
+    expect(mockStateStore.set).toHaveBeenCalledWith(
+      'appSession',
+      expect.objectContaining({
+        pref: 'dark',
+        internal: existingSession.internal, // Preserved
+      }),
+      false,
+      mockContext
+    )
+
+    // Verify c.var.auth0 updated with user and org
+    expect(mockContext.set).toHaveBeenCalledWith(
+      'auth0',
+      expect.objectContaining({
+        user: existingSession.user,
+        org: {
+          id: 'org_123',
+          name: 'Test Org',
+        },
+      })
+    )
+  })
+
+  it('should preserve RESERVED_FIELDS during merge', async () => {
+    const existingSession: SessionData = {
+      user: { sub: 'user123' },
+      idToken: 'original_id_token',
+      refreshToken: 'original_refresh_token',
+      tokenSets: [{ accessToken: 'token1' }],
+      connectionTokenSets: { 'connection1': { accessToken: 'conn_token' } },
+      internal: { sid: 'session_id', createdAt: 1000000 },
+    } as any
+
+    ;(getCachedSession as Mock).mockResolvedValueOnce(existingSession)
+
+    await updateSession(mockContext, {
+      user: 'should_be_ignored',
+      idToken: 'should_be_ignored',
+      refreshToken: 'should_be_ignored',
+      tokenSets: [],
+      connectionTokenSets: {},
+      internal: 'should_be_ignored',
+      customField: 'custom_value',
+    })
+
+    // Get the call to mockStateStore.set
+    const persistCall = (mockStateStore.set as Mock).mock.calls[0][1]
+
+    // Verify reserved fields were not overwritten
+    expect(persistCall.user).toBe(existingSession.user)
+    expect(persistCall.idToken).toBe(existingSession.idToken)
+    expect(persistCall.refreshToken).toBe(existingSession.refreshToken)
+    expect(persistCall.internal).toBe(existingSession.internal)
+
+    // Verify custom field was added
+    expect(persistCall.customField).toBe('custom_value')
   })
 })

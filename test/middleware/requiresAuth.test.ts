@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, Mock, vi } from "vitest";
 import { getClient } from "../../src/config/index";
 import { login } from "../../src/middleware/login";
 import { requiresAuth } from "../../src/middleware/requiresAuth";
-import { LoginRequiredError } from "../../src/errors/errors";
+import { LoginRequiredError } from "../../src/errors/index";
 
 // Mock dependencies
 vi.mock("hono/accepts", () => ({

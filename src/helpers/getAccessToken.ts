@@ -7,12 +7,6 @@ import { invalidateSessionCache } from './sessionCache.js'
 
 /**
  * Re-export server-js TokenSet as public return type.
- *
- * TokenSet includes:
- * - accessToken: string — JWT access token
- * - audience: string — Audience the token is for
- * - scope: string | undefined — Token scope
- * - expiresAt: number — Unix timestamp when token expires
  */
 export type Auth0TokenSet = TokenSet
 
@@ -22,7 +16,6 @@ export type Auth0TokenSet = TokenSet
 export interface GetAccessTokenOptions {
   /**
    * Optional audience for the access token.
-   * If not provided, uses default audience from config.
    */
   audience?: string
 }

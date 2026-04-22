@@ -13,14 +13,14 @@ export {
   handleBackchannelLogout,
 } from '@/middleware/index.js'
 
-// Protection middleware
-export { requiresAuth } from '@/middleware/index.js'
-export { requiresOrg } from '@/middleware/index.js'
-
-// Authorization middleware
-export { claimEquals } from '@/middleware/index.js'
-export { claimIncludes } from '@/middleware/index.js'
-export { claimCheck } from '@/middleware/index.js'
+// Protection + Authorization middleware
+export {
+  requiresAuth,
+  requiresOrg,
+  claimEquals,
+  claimIncludes,
+  claimCheck,
+} from '@/middleware/index.js'
 
 // Silent login
 export {
@@ -34,20 +34,19 @@ export {
 export { pauseSilentLogin } from '@/middleware/silentLogin.js'
 
 // Helpers
-export { getSession } from '@/helpers/getSession.js'
-export { getUser } from '@/helpers/getUser.js'
+export { getSession } from '@/helpers/sessionCache.js'
+export { getUser, updateSession } from '@/helpers/session.js'
 export { getAccessToken } from '@/helpers/getAccessToken.js'
 export type { Auth0TokenSet, GetAccessTokenOptions } from '@/helpers/getAccessToken.js'
 export { getAccessTokenForConnection } from '@/helpers/getAccessTokenForConnection.js'
 export type { GetAccessTokenForConnectionOptions } from '@/helpers/getAccessTokenForConnection.js'
-export { updateSession } from '@/helpers/updateSession.js'
 
 // Utilities
 export { toSafeRedirect } from '@/utils/util.js'
 
 // Errors
-export { Auth0Error } from '@/errors/Auth0Error.js'
 export {
+  Auth0Error,
   AccessDeniedError,
   LoginRequiredError,
   InvalidGrantError,
@@ -55,11 +54,8 @@ export {
   MissingTransactionError,
   TokenRefreshError,
   ConnectionTokenError,
-} from '@/errors/errors.js'
-/**
- * @deprecated Use Auth0Error instead.
- */
-export { Auth0Exception } from '@/errors/index.js'
+  Auth0Exception,
+} from '@/errors/index.js'
 
 // Types
 export type {

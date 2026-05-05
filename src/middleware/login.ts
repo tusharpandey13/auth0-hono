@@ -1,10 +1,10 @@
-import { OIDCAuthorizationRequestParams } from '@/config/authRequest.js'
-import { getClient, ensureClient } from '@/config/index.js'
-import { OIDCEnv } from '@/lib/honoEnv.js'
-import { toSafeRedirect } from '@/utils/util.js'
-import { mapServerError } from '@/errors/errorMap.js'
-import { createMiddleware } from 'hono/factory'
-import { MiddlewareHandler } from 'hono'
+import { OIDCAuthorizationRequestParams } from '@/config/authRequest.js';
+import { getClient, ensureClient } from '@/config/index.js';
+import { OIDCEnv } from '@/lib/honoEnv.js';
+import { toSafeRedirect } from '@/utils/util.js';
+import { mapServerError } from '@/errors/errorMap.js';
+import { createMiddleware } from 'hono/factory';
+import { MiddlewareHandler } from 'hono';
 
 export type LoginParams = {
   /**
@@ -61,29 +61,22 @@ export type LoginParams = {
 export const login = (params: LoginParams = {}) => {
   return createMiddleware<OIDCEnv>(async function (c) {
     try {
-      const { client, configuration } = getClient(c)
-      const { debug } = configuration
+      const { client, configuration } = getClient(c);
+      const { debug } = configuration;
 
       // Get the potential return URL
       const potentialReturnTo =
         params.redirectAfterLogin ??
-        (c.req.method === 'GET' && c.req.path !== configuration.routes.login
-          ? c.req.url
-          : undefined) ??
+        (c.req.method === 'GET' && c.req.path !== configuration.routes.login ? c.req.url : undefined) ??
         c.req.query('return_to') ??
-        '/'
+        '/';
 
       // Validate the URL to prevent open redirects
-      const returnTo = toSafeRedirect(
-        potentialReturnTo,
-        configuration.baseURL,
-      )
+      const returnTo = toSafeRedirect(potentialReturnTo, configuration.baseURL);
 
-      const paramsFromQuery: Record<string, string> = {}
+      const paramsFromQuery: Record<string, string> = {};
 
-      const forwardParams =
-        params.forwardAuthorizationParams ??
-        configuration.forwardAuthorizationParams
+      const forwardParams = params.forwardAuthorizationParams ?? configuration.forwardAuthorizationParams;
 
       if (forwardParams && forwardParams.length > 0) {
         for (const param of forwardParams) {
@@ -100,30 +93,29 @@ export const login = (params: LoginParams = {}) => {
       const authParams: Partial<OIDCAuthorizationRequestParams> = {
         ...(params.authorizationParams ?? {}),
         ...paramsFromQuery,
-      }
+      };
 
       if (params.silent) {
-        authParams.prompt = 'none'
+        authParams.prompt = 'none';
       }
 
-      debug('Starting login flow with:', authParams)
+      debug('Starting login flow with:', authParams);
 
       const authorizationUrl = await client.startInteractiveLogin(
         {
-          pushedAuthorizationRequests:
-            configuration.pushedAuthorizationRequests,
+          pushedAuthorizationRequests: configuration.pushedAuthorizationRequests,
           appState: { returnTo },
           authorizationParams: authParams,
         },
-        c,
-      )
+        c
+      );
 
-      return c.redirect(authorizationUrl.href)
+      return c.redirect(authorizationUrl.href);
     } catch (err) {
-      throw mapServerError(err)
+      throw mapServerError(err);
     }
-  })
-}
+  });
+};
 
 /**
  * Standalone login handler wrapper.
@@ -134,8 +126,8 @@ export const login = (params: LoginParams = {}) => {
 export function handleLogin(params?: LoginParams): MiddlewareHandler {
   return createMiddleware<OIDCEnv>(async (c, next) => {
     // Ensure client is available in standalone mode
-    await ensureClient(c)
+    await ensureClient(c);
     // Delegate to internal login handler
-    return login(params)(c, next)
-  })
+    return login(params)(c, next);
+  });
 }

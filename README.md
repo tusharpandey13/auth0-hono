@@ -227,23 +227,22 @@ const user = getUser(c)
 console.log(user.name)
 ```
 
-### `getAccessToken(c, options?)`
+### `getAccessToken(c)`
 
-Get an access token. Automatically refreshes if expired.
+Get an access token. Automatically refreshes if expired. The token audience is determined by `authorizationParams.audience` in the `auth0()` middleware config.
 
 ```typescript
 const { accessToken } = await getAccessToken(c)
 
-// With specific audience
-const token = await getAccessToken(c, { audience: 'https://api.example.com' })
-
 // Use in API call
 const res = await fetch('https://api.example.com/data', {
-  headers: { Authorization: `Bearer ${token.accessToken}` }
+  headers: { Authorization: `Bearer ${accessToken}` }
 })
 ```
 
 **Token deduplication:** If 5 parallel requests call `getAccessToken()` and a refresh is needed, only 1 refresh request is made. Others await the same promise.
+
+> **Note:** For connection-scoped tokens (e.g., Google OAuth2), use `getAccessTokenForConnection()` instead.
 
 ### `getAccessTokenForConnection(c, options)`
 

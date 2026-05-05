@@ -12,8 +12,8 @@
  * @module test/fixtures
  */
 
-import { vi } from 'vitest'
-import { Auth0Error } from '../../src/errors/Auth0Error'
+import { vi } from 'vitest';
+import { Auth0Error } from '../../src/errors/Auth0Error';
 import {
   AccessDeniedError,
   InvalidGrantError,
@@ -21,7 +21,7 @@ import {
   MissingTransactionError,
   TokenRefreshError,
   ConnectionTokenError,
-} from '../../src/errors/index'
+} from '../../src/errors/index';
 
 /**
  * Creates a mock Hono Context with get/set methods and auth0 variables.
@@ -40,35 +40,35 @@ import {
  * ```
  */
 export function createMockContext(overrides?: {
-  auth0?: any
-  auth0Configuration?: any
-  vars?: Record<string, any>
-  req?: any
+  auth0?: any;
+  auth0Configuration?: any;
+  vars?: Record<string, any>;
+  req?: any;
 }): any {
   const internalVars: Record<string, any> = {
     auth0: overrides?.auth0 ?? {},
     ...overrides?.vars,
-  }
+  };
 
   if (overrides?.auth0Configuration) {
-    internalVars.auth0Configuration = overrides.auth0Configuration
+    internalVars.auth0Configuration = overrides.auth0Configuration;
   }
 
   const varProxy = {
     auth0: internalVars.auth0,
-  }
+  };
 
   return {
     var: varProxy,
     vars: internalVars,
     get: vi.fn((key: string) => internalVars[key]),
     set: vi.fn((key: string, value: any) => {
-      internalVars[key] = value
+      internalVars[key] = value;
       // Sync var proxy for auth0 context (needed for middleware that mutate auth0)
       if (key === 'auth0') {
-        varProxy.auth0 = value
+        varProxy.auth0 = value;
       }
-      return value
+      return value;
     }),
     req: overrides?.req ?? {
       url: 'https://example.com',
@@ -77,18 +77,18 @@ export function createMockContext(overrides?: {
       header: vi.fn((_name: string) => null),
     },
     redirect: vi.fn((url: string) => {
-      return new Response('', { status: 302, headers: { location: url } })
+      return new Response('', { status: 302, headers: { location: url } });
     }),
     json: vi.fn((data: any) => {
       return new Response(JSON.stringify(data), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
-      })
+      });
     }),
     text: vi.fn((text: string) => {
-      return new Response(text, { status: 200 })
+      return new Response(text, { status: 200 });
     }),
-  }
+  };
 }
 
 /**
@@ -115,7 +115,7 @@ export function createMockClient(overrides?: Partial<Record<string, any>>): any 
     logout: vi.fn(),
     handleBackchannelLogout: vi.fn(),
     ...overrides,
-  }
+  };
 }
 
 /**
@@ -153,7 +153,7 @@ export function createMockConfig(overrides?: Record<string, any>): any {
     },
     debug: false,
     ...overrides,
-  }
+  };
 }
 
 /**
@@ -178,9 +178,9 @@ export function createMockSession(overrides?: Record<string, any>): any {
     email_verified: true,
     name: 'Test User',
     picture: 'https://example.com/avatar.jpg',
-  }
+  };
 
-  const { user: userOverrides, ...otherOverrides } = overrides ?? {}
+  const { user: userOverrides, ...otherOverrides } = overrides ?? {};
 
   return {
     user: { ...defaultUser, ...userOverrides },
@@ -200,7 +200,7 @@ export function createMockSession(overrides?: Record<string, any>): any {
       createdAt: Date.now(),
     },
     ...otherOverrides,
-  }
+  };
 }
 
 /**
@@ -226,16 +226,18 @@ export function createMapServerErrorMock() {
   return vi.fn((err: unknown): Auth0Error => {
     // Auth0Error instances pass through unchanged
     if (err instanceof Auth0Error) {
-      return err
+      return err;
     }
 
     // Handle null/undefined
     if (err === null || err === undefined) {
-      return new Auth0Error('Unknown error', 500, 'unknown_error', { cause: err })
+      return new Auth0Error('Unknown error', 500, 'unknown_error', {
+        cause: err,
+      });
     }
 
-    const errorObj = err as { code?: string; cause?: { error?: string } }
-    const causeError = errorObj.cause?.error
+    const errorObj = err as { code?: string; cause?: { error?: string } };
+    const causeError = errorObj.cause?.error;
 
     // Map by error code
     switch (errorObj.code) {
@@ -243,52 +245,46 @@ export function createMapServerErrorMock() {
         return new MissingTransactionError(
           'No login transaction found. The callback URL may have been visited directly.',
           err
-        )
+        );
 
       case 'missing_session_error':
-        return new MissingSessionError('No active session found.', err)
+        return new MissingSessionError('No active session found.', err);
 
       case 'token_by_code_error':
         if (causeError === 'access_denied') {
-          return new AccessDeniedError('The user denied the authorization request.', err)
+          return new AccessDeniedError('The user denied the authorization request.', err);
         }
         if (causeError === 'invalid_grant') {
-          return new InvalidGrantError('The authorization code is invalid or expired.', err)
+          return new InvalidGrantError('The authorization code is invalid or expired.', err);
         }
         return new Auth0Error('Token exchange failed', 401, causeError ?? 'token_exchange_error', {
           cause: err,
-        })
+        });
 
       case 'token_by_refresh_token_error':
         if (causeError === 'invalid_grant') {
-          return new InvalidGrantError(
-            'The refresh token is invalid, expired, or revoked.',
-            err
-          )
+          return new InvalidGrantError('The refresh token is invalid, expired, or revoked.', err);
         }
-        return new TokenRefreshError('Failed to refresh access token.', err)
+        return new TokenRefreshError('Failed to refresh access token.', err);
 
       case 'token_for_connection_error':
-        return new ConnectionTokenError('Failed to get token for connection.', err)
+        return new ConnectionTokenError('Failed to get token for connection.', err);
 
       case 'backchannel_logout_error':
       case 'verify_logout_token_error':
         return new Auth0Error('Backchannel logout failed', 400, 'backchannel_logout_error', {
           cause: err,
-        })
+        });
 
       case 'build_authorization_url_error':
         return new Auth0Error('Failed to build authorization URL', 500, 'authorization_url_error', {
           cause: err,
-        })
+        });
 
       default:
-        return new Auth0Error(
-          (err as Error)?.message ?? 'Unknown authentication error',
-          500,
-          'unknown_error',
-          { cause: err }
-        )
+        return new Auth0Error((err as Error)?.message ?? 'Unknown authentication error', 500, 'unknown_error', {
+          cause: err,
+        });
     }
-  })
+  });
 }

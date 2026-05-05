@@ -13,9 +13,9 @@
  * ```
  */
 
-export { getSession } from './sessionCache.js'
-export { getUser, updateSession } from './session.js'
-export { getAccessToken } from './getAccessToken.js'
-export type { Auth0TokenSet, GetAccessTokenOptions } from './getAccessToken.js'
-export { getAccessTokenForConnection } from './getAccessTokenForConnection.js'
-export type { GetAccessTokenForConnectionOptions } from './getAccessTokenForConnection.js'
+export { getSession } from './sessionCache.js';
+export { getUser, updateSession } from './session.js';
+export { getAccessToken } from './getAccessToken.js';
+export type { Auth0TokenSet } from './getAccessToken.js';
+export { getAccessTokenForConnection } from './getAccessTokenForConnection.js';
+export type { GetAccessTokenForConnectionOptions } from './getAccessTokenForConnection.js';

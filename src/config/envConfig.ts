@@ -1,5 +1,5 @@
-import { InitConfiguration } from "@/config/Configuration.js";
-import { MakeOptional } from "@/types/util.js";
+import { InitConfiguration } from '@/config/Configuration.js';
+import { MakeOptional } from '@/types/util.js';
 
 export type MinimalConfigByEnv = {
   AUTH0_DOMAIN: string;
@@ -12,21 +12,19 @@ export type MinimalConfigByEnv = {
 
 export type PartialConfig = MakeOptional<
   InitConfiguration,
-  "clientID" | "clientSecret" | "domain" | "baseURL" | "session"
+  'clientID' | 'clientSecret' | 'domain' | 'baseURL' | 'session'
 >;
 
-export const envHasConfig = (
-  config: MinimalConfigByEnv | unknown,
-): config is MinimalConfigByEnv => {
+export const envHasConfig = (config: MinimalConfigByEnv | unknown): config is MinimalConfigByEnv => {
   return (
-    typeof config === "object" &&
+    typeof config === 'object' &&
     config !== null &&
-    "AUTH0_DOMAIN" in config &&
-    "AUTH0_CLIENT_ID" in config &&
-    "BASE_URL" in config &&
-    typeof config.AUTH0_DOMAIN === "string" &&
-    typeof config.AUTH0_CLIENT_ID === "string" &&
-    typeof config.BASE_URL === "string"
+    'AUTH0_DOMAIN' in config &&
+    'AUTH0_CLIENT_ID' in config &&
+    'BASE_URL' in config &&
+    typeof config.AUTH0_DOMAIN === 'string' &&
+    typeof config.AUTH0_CLIENT_ID === 'string' &&
+    typeof config.BASE_URL === 'string'
   );
 };
 
@@ -45,25 +43,18 @@ export const envHasConfig = (
 export const assignFromEnv = (
   config: PartialConfig,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  runtimeEnv: Record<string, any>,
+  runtimeEnv: Record<string, any>
 ): InitConfiguration => {
-  const configWithoutEnv = config ?? ({} as PartialConfig)
+  const configWithoutEnv = config ?? ({} as PartialConfig);
   if (!envHasConfig(runtimeEnv)) {
-    return configWithoutEnv as InitConfiguration
+    return configWithoutEnv as InitConfiguration;
   }
 
-  const {
-    AUTH0_DOMAIN,
-    AUTH0_CLIENT_ID,
-    AUTH0_CLIENT_SECRET,
-    BASE_URL,
-    AUTH0_AUDIENCE,
-    AUTH0_SESSION_ENCRYPTION_KEY,
-  } = runtimeEnv
+  const { AUTH0_DOMAIN, AUTH0_CLIENT_ID, AUTH0_CLIENT_SECRET, BASE_URL, AUTH0_AUDIENCE, AUTH0_SESSION_ENCRYPTION_KEY } =
+    runtimeEnv;
 
-  const authorizationParams = { ...configWithoutEnv.authorizationParams }
-  authorizationParams.audience =
-    authorizationParams.audience ?? AUTH0_AUDIENCE
+  const authorizationParams = { ...configWithoutEnv.authorizationParams };
+  authorizationParams.audience = authorizationParams.audience ?? AUTH0_AUDIENCE;
 
   return {
     ...configWithoutEnv,
@@ -74,8 +65,7 @@ export const assignFromEnv = (
     authorizationParams: authorizationParams,
     session: {
       ...(configWithoutEnv.session || {}),
-      secret:
-        configWithoutEnv.session?.secret ?? AUTH0_SESSION_ENCRYPTION_KEY,
+      secret: configWithoutEnv.session?.secret ?? AUTH0_SESSION_ENCRYPTION_KEY,
     },
-  }
-}
+  };
+};

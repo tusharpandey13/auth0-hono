@@ -1,7 +1,7 @@
-import { Context } from 'hono'
-import { SessionData } from '@auth0/auth0-server-js'
-import { SESSION_CACHE_KEY } from '@/lib/constants.js'
-import { getClient } from '@/config/index.js'
+import { Context } from 'hono';
+import { SessionData } from '@auth0/auth0-server-js';
+import { SESSION_CACHE_KEY } from '@/lib/constants.js';
+import { getClient } from '@/config/index.js';
 
 /**
  * Get session from cache or load from server-js client.
@@ -11,19 +11,19 @@ import { getClient } from '@/config/index.js'
  */
 export async function getCachedSession(c: Context): Promise<SessionData | null> {
   // Check cache first
-  const cached = c.get('__auth0_session_cache')
+  const cached = c.get('__auth0_session_cache');
   if (cached !== undefined) {
-    return cached as SessionData | null // Cache hit (including null for "no session" case)
+    return cached as SessionData | null; // Cache hit (including null for "no session" case)
   }
 
   // Cache miss — load from server-js client
-  const { client } = getClient(c)
-  const session = (await client.getSession(c)) ?? null
+  const { client } = getClient(c);
+  const session = (await client.getSession(c)) ?? null;
 
   // Store in cache (including null)
-  c.set('__auth0_session_cache', session)
+  c.set('__auth0_session_cache', session);
 
-  return session
+  return session;
 }
 
 /**
@@ -35,7 +35,7 @@ export async function getCachedSession(c: Context): Promise<SessionData | null> 
  * @internal
  */
 export function invalidateSessionCache(c: Context): void {
-  c.set(SESSION_CACHE_KEY, undefined)
+  c.set(SESSION_CACHE_KEY, undefined);
 }
 
 /**
@@ -59,5 +59,5 @@ export function invalidateSessionCache(c: Context): void {
  * ```
  */
 export async function getSession(c: Context): Promise<SessionData | null> {
-  return getCachedSession(c)
+  return getCachedSession(c);
 }

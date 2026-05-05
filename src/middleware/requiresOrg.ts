@@ -1,6 +1,6 @@
-import { Auth0Error } from "@/errors/Auth0Error.js";
-import { Auth0Context } from "@/types/auth0.js";
-import { Context, MiddlewareHandler, Next } from "hono";
+import { Auth0Error } from '@/errors/Auth0Error.js';
+import { Auth0Context } from '@/types/auth0.js';
+import { Context, MiddlewareHandler, Next } from 'hono';
 
 /**
  * Options for requiresOrg middleware.
@@ -10,10 +10,7 @@ import { Context, MiddlewareHandler, Next } from "hono";
  * - `{ orgId: string }`: specific organization required
  * - `(c: Context) => boolean`: custom check function
  */
-type RequiresOrgOptions =
-  | undefined
-  | { orgId: string }
-  | ((c: Context) => boolean);
+type RequiresOrgOptions = undefined | { orgId: string } | ((c: Context) => boolean);
 
 /**
  * Middleware: verifies user has organization context.
@@ -59,55 +56,36 @@ export function requiresOrg(options?: RequiresOrgOptions): MiddlewareHandler {
 
     // Fail if not authenticated (indicates misconfiguration)
     if (!user) {
-      throw new Auth0Error(
-        "requiresOrg() must be registered after requiresAuth()",
-        500,
-        "configuration_error",
-      );
+      throw new Auth0Error('requiresOrg() must be registered after requiresAuth()', 500, 'configuration_error');
     }
 
     // Check user has org_id claim
     const orgId = user.org_id;
     if (!orgId) {
-      throw new Auth0Error(
-        "User does not belong to any organization",
-        403,
-        "missing_organization",
-      );
+      throw new Auth0Error('User does not belong to any organization', 403, 'missing_organization');
     }
 
     // If options specify a specific org, check it matches
-    if (options && typeof options === "object" && "orgId" in options) {
+    if (options && typeof options === 'object' && 'orgId' in options) {
       if (orgId !== options.orgId) {
-        throw new Auth0Error(
-          "User does not belong to the required organization",
-          403,
-          "organization_mismatch",
-        );
+        throw new Auth0Error('User does not belong to the required organization', 403, 'organization_mismatch');
       }
     }
 
     // If options is a function, call custom check with error handling
-    if (typeof options === "function") {
+    if (typeof options === 'function') {
       try {
         if (!options(c)) {
-          throw new Auth0Error(
-            "Organization check failed",
-            403,
-            "organization_check_failed",
-          );
+          throw new Auth0Error('Organization check failed', 403, 'organization_check_failed');
         }
       } catch (err) {
         // If error is already an Auth0Error, re-throw as-is
         if (err instanceof Auth0Error) throw err;
         // organization_check_error: intentional error code when user-provided check function throws
         // This wraps unexpected errors from custom validators to prevent unhandled exceptions
-        throw new Auth0Error(
-          "Organization check function threw an error",
-          500,
-          "organization_check_error",
-          { cause: err },
-        );
+        throw new Auth0Error('Organization check function threw an error', 500, 'organization_check_error', {
+          cause: err,
+        });
       }
     }
 
@@ -115,9 +93,9 @@ export function requiresOrg(options?: RequiresOrgOptions): MiddlewareHandler {
     // (in case it was not populated by auth0() middleware)
     if (!c.var.auth0?.org) {
       // Type guard: org_id is truthy (checked above), but may be number from config drift
-      const orgIdString = typeof orgId === "string" ? orgId : String(orgId);
+      const orgIdString = typeof orgId === 'string' ? orgId : String(orgId);
 
-      c.set("auth0", {
+      c.set('auth0', {
         ...c.var.auth0,
         org: { id: orgIdString, name: user.org_name as string | undefined },
       } as Auth0Context);

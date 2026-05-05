@@ -1,4 +1,4 @@
-import { SessionData, UserClaims } from '@auth0/auth0-server-js'
+import { SessionData, UserClaims } from '@auth0/auth0-server-js';
 
 /**
  * Auth0 user claims from OIDC token and custom claims.
@@ -55,13 +55,13 @@ export interface Auth0Organization {
   /**
    * Organization ID from token (org_id claim).
    */
-  id: string
+  id: string;
 
   /**
    * Organization name from token (org_name claim).
    * May be undefined if not included in token.
    */
-  name?: string
+  name?: string;
 }
 
 /**
@@ -94,7 +94,7 @@ export interface Auth0Session extends SessionData {
    * Allow custom fields added via enrichment hooks or updateSession().
    * Reserved field names (user, idToken, refreshToken, etc.) are protected by updateSession.
    */
-  [key: string]: unknown
+  [key: string]: unknown;
 }
 
 /**
@@ -125,7 +125,7 @@ export interface Auth0Context {
    * Includes standard OIDC claims (sub, name, email, org_id) plus custom claims.
    * Use `requiresAuth()` middleware to enforce authentication.
    */
-  user: Auth0User | null
+  user: Auth0User | null;
 
   /**
    * Full session data including tokens and enriched custom fields, or null if unauthenticated.
@@ -133,7 +133,7 @@ export interface Auth0Context {
    * Contains all auth tokens (idToken, refreshToken, tokenSets).
    * Custom fields from `onCallback` hook or `updateSession()` are merged here.
    */
-  session: Auth0Session | null
+  session: Auth0Session | null;
 
   /**
    * Organization context when user has `org_id` claim, or null otherwise.
@@ -141,6 +141,5 @@ export interface Auth0Context {
    * Populated when user is part of an organization. Use `requiresOrg()` middleware
    * to enforce organization membership.
    */
-  org: Auth0Organization | null
+  org: Auth0Organization | null;
 }
-

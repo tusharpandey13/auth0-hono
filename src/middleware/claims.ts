@@ -1,22 +1,18 @@
-import { Context, MiddlewareHandler, Next } from 'hono'
-import { Auth0Error } from '@/errors/Auth0Error.js'
-import { Auth0User } from '@/types/auth0.js'
+import { Context, MiddlewareHandler, Next } from 'hono';
+import { Auth0Error } from '@/errors/Auth0Error.js';
+import { Auth0User } from '@/types/auth0.js';
 
 /**
  * @internal Helper to extract authenticated user from context
  */
 function requireUser(c: Context): Auth0User {
-  const user = c.var.auth0?.user
+  const user = c.var.auth0?.user;
 
   if (!user) {
-    throw new Auth0Error(
-      'Authentication required',
-      403,
-      'access_denied'
-    )
+    throw new Auth0Error('Authentication required', 403, 'access_denied');
   }
 
-  return user
+  return user;
 }
 
 /**
@@ -34,26 +30,20 @@ function requireUser(c: Context): Auth0User {
  * app.use('/billing', claimEquals('email_verified', true))
  * ```
  */
-export function claimEquals(
-  claim: string,
-  value: string | number | boolean | null
-): MiddlewareHandler {
+export function claimEquals(claim: string, value: string | number | boolean | null): MiddlewareHandler {
   return async (c: Context, next: Next) => {
-    const user = requireUser(c)
+    const user = requireUser(c);
 
     // Check claim value
     if (user[claim] !== value) {
-      throw new Auth0Error(
-        `Claim "${claim}" does not match expected value`,
-        403,
-        'insufficient_claims',
-        { description: `Expected ${claim} to equal ${JSON.stringify(value)}` }
-      )
+      throw new Auth0Error(`Claim "${claim}" does not match expected value`, 403, 'insufficient_claims', {
+        description: `Expected ${claim} to equal ${JSON.stringify(value)}`,
+      });
     }
 
     // Claim matches — continue
-    return next()
-  }
+    return next();
+  };
 }
 
 /**
@@ -71,38 +61,27 @@ export function claimEquals(
  * // Allows access if user.permissions includes either 'read:data' or 'write:data'
  * ```
  */
-export function claimIncludes(
-  claim: string,
-  ...values: string[]
-): MiddlewareHandler {
+export function claimIncludes(claim: string, ...values: string[]): MiddlewareHandler {
   return async (c: Context, next: Next) => {
-    const user = requireUser(c)
+    const user = requireUser(c);
 
     // Get claim value
-    const claimValue = user[claim]
+    const claimValue = user[claim];
 
     // Verify claim is an array
     if (!Array.isArray(claimValue)) {
-      throw new Auth0Error(
-        `Claim "${claim}" is not an array`,
-        403,
-        'insufficient_claims'
-      )
+      throw new Auth0Error(`Claim "${claim}" is not an array`, 403, 'insufficient_claims');
     }
 
     // Check if ANY of the required values are in the array
-    const hasMatch = values.some(v => claimValue.includes(v))
+    const hasMatch = values.some((v) => claimValue.includes(v));
     if (!hasMatch) {
-      throw new Auth0Error(
-        `Claim "${claim}" does not include any of the required values`,
-        403,
-        'insufficient_claims'
-      )
+      throw new Auth0Error(`Claim "${claim}" does not include any of the required values`, 403, 'insufficient_claims');
     }
 
     // At least one value matches — continue
-    return next()
-  }
+    return next();
+  };
 }
 
 /**
@@ -120,22 +99,16 @@ export function claimIncludes(
  * }))
  * ```
  */
-export function claimCheck(
-  fn: (user: Auth0User) => boolean
-): MiddlewareHandler {
+export function claimCheck(fn: (user: Auth0User) => boolean): MiddlewareHandler {
   return async (c: Context, next: Next) => {
-    const user = requireUser(c)
+    const user = requireUser(c);
 
     // Call predicate function (must be synchronous)
     if (!fn(user)) {
-      throw new Auth0Error(
-        'Custom claim check failed',
-        403,
-        'insufficient_claims'
-      )
+      throw new Auth0Error('Custom claim check failed', 403, 'insufficient_claims');
     }
 
     // Predicate passed — continue
-    return next()
-  }
+    return next();
+  };
 }

@@ -1,7 +1,7 @@
-import { Context } from 'hono'
-import { ConnectionTokenSet } from '@auth0/auth0-server-js'
-import { getClient } from '@/config/index.js'
-import { mapServerError } from '@/errors/errorMap.js'
+import { Context } from 'hono';
+import { ConnectionTokenSet } from '@auth0/auth0-server-js';
+import { getClient } from '@/config/index.js';
+import { mapServerError } from '@/errors/errorMap.js';
 
 /**
  * Options for getAccessTokenForConnection helper.
@@ -10,12 +10,12 @@ export interface GetAccessTokenForConnectionOptions {
   /**
    * Connection name (e.g., 'google-oauth2', 'facebook', 'github').
    */
-  connection: string
+  connection: string;
 
   /**
    * Optional login hint to help identify which account to use.
    */
-  loginHint?: string
+  loginHint?: string;
 }
 
 /**
@@ -55,13 +55,13 @@ export async function getAccessTokenForConnection(
   c: Context,
   options: GetAccessTokenForConnectionOptions
 ): Promise<ConnectionTokenSet> {
-  const { client } = getClient(c)
+  const { client } = getClient(c);
 
   try {
     // Thin wrapper — server-js does all the work
-    return await client.getAccessTokenForConnection(options, c)
+    return await client.getAccessTokenForConnection(options, c);
   } catch (err) {
     // Map server-js error to SDK error
-    throw mapServerError(err)
+    throw mapServerError(err);
   }
 }

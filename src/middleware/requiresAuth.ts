@@ -1,11 +1,11 @@
-import { getClient } from "@/config/index.js";
-import { OIDCEnv } from "@/lib/honoEnv.js";
-import { Context, Next } from "hono";
-import { accepts } from "hono/accepts";
-import { login } from "./login.js";
+import { getClient } from '@/config/index.js';
+import { OIDCEnv } from '@/lib/honoEnv.js';
+import { Context, Next } from 'hono';
+import { accepts } from 'hono/accepts';
+import { login } from './login.js';
 import { LoginRequiredError } from '@/errors/index.js';
 
-type OnRequiredAuth = "error" | "login";
+type OnRequiredAuth = 'error' | 'login';
 /**
  * This middleware checks if the user is authetnicated.
  *
@@ -26,15 +26,12 @@ export function requiresAuth(behavior?: OnRequiredAuth) {
     if (!session) {
       const acceptsHTML =
         accepts(c, {
-          header: "Accept",
-          supports: ["text/html", "application/json"],
-          default: "application/json",
-        }) === "text/html";
+          header: 'Accept',
+          supports: ['text/html', 'application/json'],
+          default: 'application/json',
+        }) === 'text/html';
 
-      const shouldFail =
-        !acceptsHTML ||
-        behavior === "error" ||
-        (!behavior && configuration.errorOnRequiredAuth);
+      const shouldFail = !acceptsHTML || behavior === 'error' || (!behavior && configuration.errorOnRequiredAuth);
 
       if (shouldFail) {
         throw new LoginRequiredError('Authentication required');

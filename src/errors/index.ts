@@ -1,6 +1,6 @@
 // Core error class
-import { Auth0Error } from './Auth0Error.js'
-export { Auth0Error } from './Auth0Error.js'
+import { Auth0Error } from './Auth0Error.js';
+export { Auth0Error } from './Auth0Error.js';
 
 /**
  * Thrown when user is denied access to a protected resource.
@@ -8,7 +8,7 @@ export { Auth0Error } from './Auth0Error.js'
  */
 export class AccessDeniedError extends Auth0Error {
   constructor(description?: string, cause?: unknown) {
-    super('Access denied', 403, 'access_denied', { description, cause })
+    super('Access denied', 403, 'access_denied', { description, cause });
   }
 }
 
@@ -18,7 +18,7 @@ export class AccessDeniedError extends Auth0Error {
  */
 export class LoginRequiredError extends Auth0Error {
   constructor(description?: string, cause?: unknown) {
-    super('Login required', 401, 'login_required', { description, cause })
+    super('Login required', 401, 'login_required', { description, cause });
   }
 }
 
@@ -28,7 +28,7 @@ export class LoginRequiredError extends Auth0Error {
  */
 export class InvalidGrantError extends Auth0Error {
   constructor(description?: string, cause?: unknown) {
-    super('Invalid grant', 401, 'invalid_grant', { description, cause })
+    super('Invalid grant', 401, 'invalid_grant', { description, cause });
   }
 }
 
@@ -38,7 +38,7 @@ export class InvalidGrantError extends Auth0Error {
  */
 export class MissingSessionError extends Auth0Error {
   constructor(description?: string, cause?: unknown) {
-    super('Missing session', 401, 'missing_session', { description, cause })
+    super('Missing session', 401, 'missing_session', { description, cause });
   }
 }
 
@@ -48,7 +48,10 @@ export class MissingSessionError extends Auth0Error {
  */
 export class MissingTransactionError extends Auth0Error {
   constructor(description?: string, cause?: unknown) {
-    super('Missing transaction', 400, 'missing_transaction', { description, cause })
+    super('Missing transaction', 400, 'missing_transaction', {
+      description,
+      cause,
+    });
   }
 }
 
@@ -58,7 +61,10 @@ export class MissingTransactionError extends Auth0Error {
  */
 export class TokenRefreshError extends Auth0Error {
   constructor(description?: string, cause?: unknown) {
-    super('Token refresh failed', 401, 'token_refresh_error', { description, cause })
+    super('Token refresh failed', 401, 'token_refresh_error', {
+      description,
+      cause,
+    });
   }
 }
 
@@ -68,14 +74,17 @@ export class TokenRefreshError extends Auth0Error {
  */
 export class ConnectionTokenError extends Auth0Error {
   constructor(description?: string, cause?: unknown) {
-    super('Connection token error', 401, 'connection_token_error', { description, cause })
+    super('Connection token error', 401, 'connection_token_error', {
+      description,
+      cause,
+    });
   }
 }
 
 // Error mapper for server-js errors
-export { mapServerError } from './errorMap.js'
+export { mapServerError } from './errorMap.js';
 
 /**
  * @deprecated Use Auth0Error instead. This alias is maintained for backward compatibility.
  */
-export { Auth0Error as Auth0Exception }
+export { Auth0Error as Auth0Exception };

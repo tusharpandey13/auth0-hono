@@ -1,14 +1,14 @@
-import { Configuration } from '@/config/Configuration.js'
-import { HonoCookieHandler } from '@/session/HonoCookieHandler.js'
-import { createRouteUrl } from '@/utils/util.js'
+import { Configuration } from '@/config/Configuration.js';
+import { HonoCookieHandler } from '@/session/HonoCookieHandler.js';
+import { createRouteUrl } from '@/utils/util.js';
 import {
   CookieTransactionStore,
   ServerClient,
   StatefulStateStore,
   StatelessStateStore,
   StateStore,
-} from '@auth0/auth0-server-js'
-import { Context } from 'hono'
+} from '@auth0/auth0-server-js';
+import { Context } from 'hono';
 
 /**
  * Bundle of Auth0 client components.
@@ -18,18 +18,18 @@ export interface Auth0ClientBundle {
   /**
    * OIDC server client for Auth0 authorization flows.
    */
-  serverClient: ServerClient<Context>
+  serverClient: ServerClient<Context>;
 
   /**
    * State store for session persistence and retrieval.
    * Retained by SDK for use in persistSession() and updateSession() helpers.
    */
-  stateStore: StateStore<Context>
+  stateStore: StateStore<Context>;
 
   /**
    * Cookie handler for session storage.
    */
-  cookieHandler: HonoCookieHandler
+  cookieHandler: HonoCookieHandler;
 }
 
 /**
@@ -42,10 +42,7 @@ export interface Auth0ClientBundle {
  * @param cookieHandler - Cookie handler instance
  * @returns State store instance
  */
-export function createStateStore(
-  config: Configuration,
-  cookieHandler: HonoCookieHandler,
-): StateStore<Context> {
+export function createStateStore(config: Configuration, cookieHandler: HonoCookieHandler): StateStore<Context> {
   // Choose stateless or stateful based on config
   const baseStore = config.session.store
     ? new StatefulStateStore(
@@ -54,22 +51,22 @@ export function createStateStore(
           secret: config.session.secret,
           store: config.session.store,
         },
-        cookieHandler,
+        cookieHandler
       )
     : new StatelessStateStore(
         {
           ...config.session,
           secret: config.session.secret,
         },
-        cookieHandler,
-      )
+        cookieHandler
+      );
 
   // POST-BETA: Wrap with HonoStateStore for beforeSessionSaved hook
   // if (config.beforeSessionSaved) {
   //   return new HonoStateStore(baseStore, config.beforeSessionSaved)
   // }
 
-  return baseStore
+  return baseStore;
 }
 
 /**
@@ -83,8 +80,8 @@ export function createStateStore(
  * @returns Auth0ClientBundle with serverClient, stateStore, and cookieHandler
  */
 export function initializeOidcClient(config: Configuration): Auth0ClientBundle {
-  const cookieHandler = new HonoCookieHandler()
-  const stateStore = createStateStore(config, cookieHandler)
+  const cookieHandler = new HonoCookieHandler();
+  const stateStore = createStateStore(config, cookieHandler);
 
   const serverClient = new ServerClient<Context>({
     domain: config.domain,
@@ -94,22 +91,19 @@ export function initializeOidcClient(config: Configuration): Auth0ClientBundle {
     clientAssertionSigningAlg: config.clientAssertionSigningAlg,
     authorizationParams: {
       ...config.authorizationParams,
-      redirect_uri: createRouteUrl(
-        config.routes.callback,
-        config.baseURL,
-      ).toString(),
+      redirect_uri: createRouteUrl(config.routes.callback, config.baseURL).toString(),
     },
     transactionStore: new CookieTransactionStore(
       {
         secret: config.session.secret,
       },
-      cookieHandler,
+      cookieHandler
     ),
     stateStore, // Same reference retained below
     stateIdentifier: config.session.cookie?.name ?? 'appSession',
     customFetch: config.fetch,
-  })
+  });
 
   // RETURN: Bundle with retained state store reference
-  return { serverClient, stateStore, cookieHandler }
+  return { serverClient, stateStore, cookieHandler };
 }

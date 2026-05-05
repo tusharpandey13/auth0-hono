@@ -1,10 +1,8 @@
 export const enforceLeadingSlash = (path: string) => {
-  return path.split("")[0] === "/" ? path : "/" + path;
+  return path.split('')[0] === '/' ? path : '/' + path;
 };
 
-export function toSearchParams(
-  params: Record<string, string | number | undefined>,
-): URLSearchParams {
+export function toSearchParams(params: Record<string, string | number | undefined>): URLSearchParams {
   const entries = Object.entries(params)
     .filter((entry): entry is [string, string | number] => {
       return entry[1] !== undefined;
@@ -25,14 +23,14 @@ export function toSearchParams(
 export function validateRedirectUrl(url: string, baseURL?: string): string {
   // If the URL is empty or undefined, return the default path
   if (!url) {
-    return "/";
+    return '/';
   }
 
   // Allow relative URLs that start with /
-  if (url.startsWith("/")) {
+  if (url.startsWith('/')) {
     // Prevent protocol-relative URLs like //evil.com
-    if (url.startsWith("//")) {
-      return "/";
+    if (url.startsWith('//')) {
+      return '/';
     }
     return url;
   }
@@ -48,11 +46,11 @@ export function validateRedirectUrl(url: string, baseURL?: string): string {
       }
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (error) {
-      return "/"; // If the URL is invalid, return the default path
+      return '/'; // If the URL is invalid, return the default path
     }
   }
   // If we reach here, the URL is not safe, return the default path
-  return "/";
+  return '/';
 }
 
 /**
@@ -62,9 +60,7 @@ export function validateRedirectUrl(url: string, baseURL?: string): string {
  * @returns The value without a leading slash.
  */
 function ensureNoLeadingSlash(value: string) {
-  return value && value.startsWith("/")
-    ? value.substring(1, value.length)
-    : value;
+  return value && value.startsWith('/') ? value.substring(1, value.length) : value;
 }
 
 /**
@@ -74,7 +70,7 @@ function ensureNoLeadingSlash(value: string) {
  * @returns The value with a trailing slash.
  */
 function ensureTrailingSlash(value: string) {
-  return value && !value.endsWith("/") ? `${value}/` : value;
+  return value && !value.endsWith('/') ? `${value}/` : value;
 }
 
 /**
@@ -93,10 +89,7 @@ export function createRouteUrl(url: string, base: string) {
  * @param safeBaseUrl The base URL to check against.
  * @returns A safe redirect URL or undefined if the redirect URL is not safe.
  */
-export function toSafeRedirect(
-  dangerousRedirect: string,
-  safeBaseUrl: string,
-): string | undefined {
+export function toSafeRedirect(dangerousRedirect: string, safeBaseUrl: string): string | undefined {
   let url: URL;
 
   try {

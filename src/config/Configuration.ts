@@ -1,5 +1,5 @@
-import { OIDCAuthorizationRequestParams } from "@/config/authRequest.js";
-import { SessionConfiguration } from "@/types/session.js";
+import { OIDCAuthorizationRequestParams } from '@/config/authRequest.js';
+import { SessionConfiguration } from '@/types/session.js';
 import { Context } from 'hono';
 import { SessionData } from '@auth0/auth0-server-js';
 import { Auth0Error } from '@/errors/Auth0Error.js';
@@ -159,8 +159,8 @@ export interface Configuration {
   onCallback?: (
     c: Context,
     error: Auth0Error | null,
-    session: SessionData | null,
-  ) => SessionData | Response | void | Promise<SessionData | Response | void>
+    session: SessionData | null
+  ) => SessionData | Response | void | Promise<SessionData | Response | void>;
 
   /**
    * The method to use for client authentication.
@@ -173,12 +173,7 @@ export interface Configuration {
    *
    * Otherwise, the @default is `client_secret_basic`.
    */
-  clientAuthMethod:
-    | "client_secret_basic"
-    | "client_secret_post"
-    | "client_secret_jwt"
-    | "private_key_jwt"
-    | "none";
+  clientAuthMethod: 'client_secret_basic' | 'client_secret_post' | 'client_secret_jwt' | 'private_key_jwt' | 'none';
 
   /**
    * The client assertion signing key.
@@ -193,17 +188,17 @@ export interface Configuration {
    * @default 'RS256'
    */
   clientAssertionSigningAlg?:
-    | "RS256"
-    | "RS384"
-    | "RS512"
-    | "PS256"
-    | "PS384"
-    | "PS512"
-    | "ES256"
-    | "ES256K"
-    | "ES384"
-    | "ES512"
-    | "EdDSA";
+    | 'RS256'
+    | 'RS384'
+    | 'RS512'
+    | 'PS256'
+    | 'PS384'
+    | 'PS512'
+    | 'ES256'
+    | 'ES256K'
+    | 'ES384'
+    | 'ES512'
+    | 'EdDSA';
 
   /**
    * Returns 401 if the user is not authenticated.
@@ -263,7 +258,7 @@ export interface Configuration {
 }
 
 // Type for the required fields that must be provided in InitConfiguration
-type RequiredConfigFields = "domain" | "baseURL" | "clientID";
+type RequiredConfigFields = 'domain' | 'baseURL' | 'clientID';
 
 // Type for the optional session field that should be partial in InitConfiguration
 type SessionField = {
@@ -281,6 +276,6 @@ type RoutesField = {
  * since they have defaults in the schema.
  */
 export type InitConfiguration = Pick<Configuration, RequiredConfigFields> &
-  Partial<Omit<Configuration, RequiredConfigFields | "session" | "routes">> &
+  Partial<Omit<Configuration, RequiredConfigFields | 'session' | 'routes'>> &
   SessionField &
   RoutesField;

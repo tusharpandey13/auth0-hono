@@ -1,7 +1,7 @@
-import { Configuration } from '@/config/Configuration.js'
-import { Auth0Context } from '@/types/auth0.js'
-import { ServerClient, StateStore } from '@auth0/auth0-server-js'
-import { Context } from 'hono'
+import { Configuration } from '@/config/Configuration.js';
+import { Auth0Context } from '@/types/auth0.js';
+import { ServerClient, StateStore } from '@auth0/auth0-server-js';
+import { Context } from 'hono';
 
 /**
  * Module augmentation for Hono's ContextVariableMap.
@@ -24,38 +24,38 @@ declare module 'hono' {
      * Set by auth0() middleware on every request.
      * Null properties indicate unauthenticated request.
      */
-    auth0?: Auth0Context
+    auth0?: Auth0Context;
 
     /**
      * Internal: Auth0 OIDC server client instance.
      * Set by auth0() middleware during initialization.
      */
-    auth0Client?: ServerClient<Context>
+    auth0Client?: ServerClient<Context>;
 
     /**
      * Internal: Parsed Auth0 configuration.
      * Set by auth0() middleware during initialization.
      */
-    auth0Configuration?: Configuration
+    auth0Configuration?: Configuration;
 
     /**
      * Internal: Retained state store reference for session mutations.
      * Set by auth0() middleware during initialization.
      * @see STATE_STORE_KEY in lib/constants.ts
      */
-    __auth0_state_store?: StateStore<Context>
+    __auth0_state_store?: StateStore<Context>;
 
     /**
      * Internal: Request-scoped session cache.
      * @see SESSION_CACHE_KEY in lib/constants.ts
      */
-    __auth0_session_cache?: unknown
+    __auth0_session_cache?: unknown;
 
     /**
      * Internal: Promise-based token refresh cache.
      * @see REFRESH_CACHE_KEY in lib/constants.ts
      */
-    __auth0_refresh_promises?: unknown
+    __auth0_refresh_promises?: unknown;
   }
 }
 
@@ -80,19 +80,19 @@ export interface OIDCVariables {
    * Auth0 context: user, session, and organization.
    * Always present after auth0() middleware.
    */
-  auth0: Auth0Context
+  auth0: Auth0Context;
 
   /**
    * Auth0 OIDC server client instance.
    * Used internally by helpers and middleware.
    */
-  auth0Client: ServerClient<Context>
+  auth0Client: ServerClient<Context>;
 
   /**
    * Parsed Auth0 configuration.
    * Used internally by helpers and middleware.
    */
-  auth0Configuration: Configuration
+  auth0Configuration: Configuration;
 }
 
 /**
@@ -110,7 +110,6 @@ export interface OIDCVariables {
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export interface OIDCEnv<TBindings = any> {
-  Bindings: TBindings
-  Variables: OIDCVariables
+  Bindings: TBindings;
+  Variables: OIDCVariables;
 }
-

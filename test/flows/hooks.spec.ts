@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { callback } from '../../src/middleware/callback'
-import { SessionData } from '@auth0/auth0-server-js'
-import { Auth0Error } from '../../src/errors/Auth0Error'
-import { createMockContext, createMockClient, createMockConfig, createMockSession } from '../fixtures'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { callback } from '../../src/middleware/callback';
+import { SessionData } from '@auth0/auth0-server-js';
+import { Auth0Error } from '../../src/errors/Auth0Error';
+import { createMockContext, createMockClient, createMockConfig, createMockSession } from '../fixtures';
 
 // Mock dependencies
 vi.mock('../../src/config/index', () => ({
@@ -11,33 +11,33 @@ vi.mock('../../src/config/index', () => ({
     client: c.get('mockClient'),
     configuration: c.get('mockConfig'),
   })),
-}))
+}));
 
 vi.mock('../../src/utils/util', () => ({
   createRouteUrl: vi.fn((url) => url),
   toSafeRedirect: vi.fn((url) => url),
-}))
+}));
 
 vi.mock('../../src/helpers/sessionCache', () => ({
   invalidateSessionCache: vi.fn(),
-}))
+}));
 
 vi.mock('../../src/middleware/silentLogin', () => ({
   resumeSilentLogin: vi.fn().mockReturnValue(vi.fn().mockResolvedValue(undefined)),
-}))
+}));
 
 vi.mock('../../src/errors/errorMap', () => ({
   mapServerError: (err: any) => err,
-}))
+}));
 
 describe('onCallback Hook', () => {
-  let mockContext: any
-  let mockConfig: any
-  let mockClient: any
-  let mockSession: SessionData
+  let mockContext: any;
+  let mockConfig: any;
+  let mockClient: any;
+  let mockSession: SessionData;
 
   beforeEach(() => {
-    vi.clearAllMocks()
+    vi.clearAllMocks();
 
     mockSession = createMockSession({
       user: {
@@ -46,11 +46,11 @@ describe('onCallback Hook', () => {
         name: 'Test User',
         email_verified: true,
       },
-    })
+    });
 
     mockConfig = createMockConfig({
       onCallback: undefined, // Will be set per test
-    })
+    });
 
     mockClient = createMockClient({
       completeInteractiveLogin: vi.fn().mockResolvedValue({
@@ -58,50 +58,53 @@ describe('onCallback Hook', () => {
       }),
       getSession: vi.fn().mockResolvedValue(mockSession),
       logout: vi.fn(),
-    })
+    });
 
     mockContext = createMockContext({
       req: {
         url: 'https://app.test.com/auth/callback?code=test_code&state=test_state',
         method: 'GET',
       },
-    })
+    });
 
     // Set up mock stateStore with contract-enforcing set
     const mockStateStore = {
       get: vi.fn().mockResolvedValue({
         ...mockSession,
-        internal: { sid: 'session_id_123', createdAt: Math.floor(Date.now() / 1000) },
+        internal: {
+          sid: 'session_id_123',
+          createdAt: Math.floor(Date.now() / 1000),
+        },
       }),
       set: vi.fn().mockImplementation(async (_id: string, stateData: any) => {
         // Enforce contract: internal.createdAt must exist
         if (!stateData?.internal?.createdAt) {
-          throw new TypeError("Cannot read properties of undefined (reading 'createdAt')")
+          throw new TypeError("Cannot read properties of undefined (reading 'createdAt')");
         }
       }),
-    }
-    mockContext.vars['__auth0_state_store'] = mockStateStore
+    };
+    mockContext.vars['__auth0_state_store'] = mockStateStore;
 
     mockContext.get = vi.fn((key: string) => {
-      if (key === 'mockClient') return mockClient
-      if (key === 'mockConfig') return mockConfig
-      if (key === '__auth0_state_store') return mockStateStore
-      return mockContext.vars[key]
-    })
-  })
+      if (key === 'mockClient') return mockClient;
+      if (key === 'mockConfig') return mockConfig;
+      if (key === '__auth0_state_store') return mockStateStore;
+      return mockContext.vars[key];
+    });
+  });
 
   afterEach(() => {
-    vi.clearAllMocks()
-  })
+    vi.clearAllMocks();
+  });
 
   it('should call onCallback hook on successful callback', async () => {
-    const hookFn = vi.fn().mockResolvedValue(undefined)
-    mockConfig.onCallback = hookFn
+    const hookFn = vi.fn().mockResolvedValue(undefined);
+    mockConfig.onCallback = hookFn;
 
-    const callbackMiddleware = callback()
-    const next = vi.fn()
+    const callbackMiddleware = callback();
+    const next = vi.fn();
 
-    await callbackMiddleware(mockContext, next)
+    await callbackMiddleware(mockContext, next);
 
     // Verify hook was called with correct parameters
     expect(hookFn).toHaveBeenCalledWith(
@@ -110,8 +113,8 @@ describe('onCallback Hook', () => {
       expect.objectContaining({
         user: expect.objectContaining({ sub: 'auth0|123' }),
       })
-    )
-  })
+    );
+  });
 
   it('should support session enrichment in onCallback', async () => {
     const enrichedSession = {
@@ -121,21 +124,21 @@ describe('onCallback Hook', () => {
         ...mockSession.user,
         customField: 'custom_value',
       },
-    }
+    };
 
-    const hookFn = vi.fn().mockResolvedValue(enrichedSession)
-    mockConfig.onCallback = hookFn
+    const hookFn = vi.fn().mockResolvedValue(enrichedSession);
+    mockConfig.onCallback = hookFn;
 
-    const callbackMiddleware = callback()
-    const next = vi.fn()
+    const callbackMiddleware = callback();
+    const next = vi.fn();
 
-    await callbackMiddleware(mockContext, next)
+    await callbackMiddleware(mockContext, next);
 
     // Verify hook was called
-    expect(hookFn).toHaveBeenCalled()
+    expect(hookFn).toHaveBeenCalled();
 
     // Verify enriched session was persisted via stateStore.set (with internal preserved)
-    const mockStateStore = mockContext.get('__auth0_state_store')
+    const mockStateStore = mockContext.get('__auth0_state_store');
     expect(mockStateStore.set).toHaveBeenCalledWith(
       'appSession',
       expect.objectContaining({
@@ -144,38 +147,38 @@ describe('onCallback Hook', () => {
       }),
       false,
       mockContext
-    )
-  })
+    );
+  });
 
   it('should support Response override in onCallback on success', async () => {
-    const customResponse = new Response('Welcome!', { status: 200 })
-    const hookFn = vi.fn().mockResolvedValue(customResponse)
-    mockConfig.onCallback = hookFn
+    const customResponse = new Response('Welcome!', { status: 200 });
+    const hookFn = vi.fn().mockResolvedValue(customResponse);
+    mockConfig.onCallback = hookFn;
 
-    const callbackMiddleware = callback()
-    const next = vi.fn()
+    const callbackMiddleware = callback();
+    const next = vi.fn();
 
-    const result = await callbackMiddleware(mockContext, next)
+    const result = await callbackMiddleware(mockContext, next);
 
     // Verify hook was called
-    expect(hookFn).toHaveBeenCalled()
+    expect(hookFn).toHaveBeenCalled();
 
     // Verify custom response was used (overrides default redirect)
-    expect(result).toBe(customResponse)
-  })
+    expect(result).toBe(customResponse);
+  });
 
   it('should call onCallback hook on callback error', async () => {
-    const testError = new Auth0Error('User denied', 403, 'access_denied')
-    mockClient.completeInteractiveLogin.mockRejectedValue(testError)
+    const testError = new Auth0Error('User denied', 403, 'access_denied');
+    mockClient.completeInteractiveLogin.mockRejectedValue(testError);
 
-    const hookFn = vi.fn().mockResolvedValue(undefined)
-    mockConfig.onCallback = hookFn
+    const hookFn = vi.fn().mockResolvedValue(undefined);
+    mockConfig.onCallback = hookFn;
 
-    const callbackMiddleware = callback()
-    const next = vi.fn()
+    const callbackMiddleware = callback();
+    const next = vi.fn();
 
     try {
-      await callbackMiddleware(mockContext, next)
+      await callbackMiddleware(mockContext, next);
     } catch {
       // Error is expected to be thrown
     }
@@ -185,127 +188,129 @@ describe('onCallback Hook', () => {
       mockContext,
       expect.any(Object), // Error object
       null // No session on error path
-    )
-  })
+    );
+  });
 
   it('should support Response override in onCallback on error', async () => {
-    const testError = new Auth0Error('User denied', 403, 'access_denied')
-    mockClient.completeInteractiveLogin.mockRejectedValue(testError)
+    const testError = new Auth0Error('User denied', 403, 'access_denied');
+    mockClient.completeInteractiveLogin.mockRejectedValue(testError);
 
-    const customErrorResponse = new Response('Login cancelled', { status: 200 })
-    const hookFn = vi.fn().mockResolvedValue(customErrorResponse)
-    mockConfig.onCallback = hookFn
+    const customErrorResponse = new Response('Login cancelled', {
+      status: 200,
+    });
+    const hookFn = vi.fn().mockResolvedValue(customErrorResponse);
+    mockConfig.onCallback = hookFn;
 
-    const callbackMiddleware = callback()
-    const next = vi.fn()
+    const callbackMiddleware = callback();
+    const next = vi.fn();
 
-    const result = await callbackMiddleware(mockContext, next)
+    const result = await callbackMiddleware(mockContext, next);
 
     // Verify hook was called with error
-    expect(hookFn).toHaveBeenCalled()
+    expect(hookFn).toHaveBeenCalled();
 
     // Verify custom error response was used
-    expect(result).toBe(customErrorResponse)
-  })
+    expect(result).toBe(customErrorResponse);
+  });
 
   it('should propagate original auth error when hook throws', async () => {
-    const authError = new Auth0Error('Missing transaction', 400, 'missing_transaction')
-    mockClient.completeInteractiveLogin.mockRejectedValue(authError)
+    const authError = new Auth0Error('Missing transaction', 400, 'missing_transaction');
+    mockClient.completeInteractiveLogin.mockRejectedValue(authError);
 
-    const hookThrowError = new Error('Hook API call failed')
-    const hookFn = vi.fn().mockRejectedValue(hookThrowError)
-    mockConfig.onCallback = hookFn
+    const hookThrowError = new Error('Hook API call failed');
+    const hookFn = vi.fn().mockRejectedValue(hookThrowError);
+    mockConfig.onCallback = hookFn;
 
-    const callbackMiddleware = callback()
-    const next = vi.fn()
+    const callbackMiddleware = callback();
+    const next = vi.fn();
 
-    let caughtError: any
+    let caughtError: any;
     try {
-      await callbackMiddleware(mockContext, next)
+      await callbackMiddleware(mockContext, next);
     } catch (err) {
-      caughtError = err
+      caughtError = err;
     }
 
     // Original auth error should be thrown, not hook error
-    expect(caughtError).toEqual(authError)
-    expect(caughtError).not.toEqual(hookThrowError)
-  })
+    expect(caughtError).toEqual(authError);
+    expect(caughtError).not.toEqual(hookThrowError);
+  });
 
   it('should not mask auth error even if hook fails silently', async () => {
-    const authError = new Auth0Error('Invalid grant', 401, 'invalid_grant')
-    mockClient.completeInteractiveLogin.mockRejectedValue(authError)
+    const authError = new Auth0Error('Invalid grant', 401, 'invalid_grant');
+    mockClient.completeInteractiveLogin.mockRejectedValue(authError);
 
     // Hook throws error during error path handling
     const hookFn = vi.fn().mockImplementation(() => {
-      throw new Error('Hook failed unexpectedly')
-    })
-    mockConfig.onCallback = hookFn
+      throw new Error('Hook failed unexpectedly');
+    });
+    mockConfig.onCallback = hookFn;
 
-    const callbackMiddleware = callback()
-    const next = vi.fn()
+    const callbackMiddleware = callback();
+    const next = vi.fn();
 
-    let caughtError: any
+    let caughtError: any;
     try {
-      await callbackMiddleware(mockContext, next)
+      await callbackMiddleware(mockContext, next);
     } catch (err) {
-      caughtError = err
+      caughtError = err;
     }
 
     // Original auth error should propagate
-    expect(caughtError).toEqual(authError)
-  })
+    expect(caughtError).toEqual(authError);
+  });
 
   it('should override hook with callback parameter', async () => {
-    const configHook = vi.fn().mockResolvedValue(undefined)
-    const paramHook = vi.fn().mockResolvedValue(undefined)
+    const configHook = vi.fn().mockResolvedValue(undefined);
+    const paramHook = vi.fn().mockResolvedValue(undefined);
 
-    mockConfig.onCallback = configHook
+    mockConfig.onCallback = configHook;
 
-    const callbackMiddleware = callback({ onCallback: paramHook })
-    const next = vi.fn()
+    const callbackMiddleware = callback({ onCallback: paramHook });
+    const next = vi.fn();
 
-    await callbackMiddleware(mockContext, next)
+    await callbackMiddleware(mockContext, next);
 
     // Verify param hook was used instead of config hook
-    expect(paramHook).toHaveBeenCalled()
-    expect(configHook).not.toHaveBeenCalled()
-  })
+    expect(paramHook).toHaveBeenCalled();
+    expect(configHook).not.toHaveBeenCalled();
+  });
 
   it('should handle hook returning undefined on success', async () => {
-    const hookFn = vi.fn().mockResolvedValue(undefined)
-    mockConfig.onCallback = hookFn
+    const hookFn = vi.fn().mockResolvedValue(undefined);
+    mockConfig.onCallback = hookFn;
 
-    const callbackMiddleware = callback()
-    const next = vi.fn()
+    const callbackMiddleware = callback();
+    const next = vi.fn();
 
-    const result = await callbackMiddleware(mockContext, next)
+    const result = await callbackMiddleware(mockContext, next);
 
     // Verify hook was called
-    expect(hookFn).toHaveBeenCalled()
+    expect(hookFn).toHaveBeenCalled();
 
     // Verify default behavior: redirect to returnTo
-    expect(result?.status).toBe(302) // Redirect
-  })
+    expect(result?.status).toBe(302); // Redirect
+  });
 
   it('should handle hook returning enriched session via Response override params', async () => {
-    const enrichmentData = { roles: ['admin'] }
+    const enrichmentData = { roles: ['admin'] };
 
     const hookFn = vi.fn(async (c: any, err: any, session: any) => {
       if (!err && session) {
         // Return enriched session
-        return { ...session, ...enrichmentData }
+        return { ...session, ...enrichmentData };
       }
-    })
+    });
 
-    mockConfig.onCallback = hookFn
+    mockConfig.onCallback = hookFn;
 
-    const callbackMiddleware = callback()
-    const next = vi.fn()
+    const callbackMiddleware = callback();
+    const next = vi.fn();
 
-    await callbackMiddleware(mockContext, next)
+    await callbackMiddleware(mockContext, next);
 
     // Verify enriched data was persisted via stateStore.set (with internal intact)
-    const mockStateStore = mockContext.get('__auth0_state_store')
+    const mockStateStore = mockContext.get('__auth0_state_store');
     expect(mockStateStore.set).toHaveBeenCalledWith(
       'appSession',
       expect.objectContaining({
@@ -314,38 +319,38 @@ describe('onCallback Hook', () => {
       }),
       false,
       mockContext
-    )
-  })
+    );
+  });
 
   // REQ-B1: Prevent hook from overwriting internal field
   it('should preserve internal field when hook returns enriched session without internal', async () => {
     const rawSessionInternal = {
       sid: 'original_session_id',
       createdAt: 1234567890,
-    }
+    };
 
     const enrichedSessionFromHook = {
       ...mockSession,
       internal: undefined, // Hook tries to overwrite
       permissions: ['read:data'],
-    }
+    };
 
-    const hookFn = vi.fn().mockResolvedValue(enrichedSessionFromHook)
-    mockConfig.onCallback = hookFn
+    const hookFn = vi.fn().mockResolvedValue(enrichedSessionFromHook);
+    mockConfig.onCallback = hookFn;
 
-    const mockStateStore = mockContext.get('__auth0_state_store')
+    const mockStateStore = mockContext.get('__auth0_state_store');
     mockStateStore.get.mockResolvedValue({
       ...mockSession,
       internal: rawSessionInternal,
-    })
+    });
 
-    const callbackMiddleware = callback()
-    const next = vi.fn()
+    const callbackMiddleware = callback();
+    const next = vi.fn();
 
-    await callbackMiddleware(mockContext, next)
+    await callbackMiddleware(mockContext, next);
 
     // Verify hook was called
-    expect(hookFn).toHaveBeenCalled()
+    expect(hookFn).toHaveBeenCalled();
 
     // Verify internal field was preserved from rawState, not from hook
     expect(mockStateStore.set).toHaveBeenCalledWith(
@@ -356,38 +361,38 @@ describe('onCallback Hook', () => {
       }),
       false,
       mockContext
-    )
-  })
+    );
+  });
 
   it('should NOT allow hook to overwrite internal field', async () => {
     const hookProvidedInternal = {
       sid: 'hacker_session_id',
       createdAt: 9999999999,
-    }
+    };
 
     const enrichedSessionFromHook = {
       ...mockSession,
       internal: hookProvidedInternal, // Hook tries to override
-    }
+    };
 
-    const hookFn = vi.fn().mockResolvedValue(enrichedSessionFromHook)
-    mockConfig.onCallback = hookFn
+    const hookFn = vi.fn().mockResolvedValue(enrichedSessionFromHook);
+    mockConfig.onCallback = hookFn;
 
     const originalInternal = {
       sid: 'original_session_id',
       createdAt: 1234567890,
-    }
+    };
 
-    const mockStateStore = mockContext.get('__auth0_state_store')
+    const mockStateStore = mockContext.get('__auth0_state_store');
     mockStateStore.get.mockResolvedValue({
       ...mockSession,
       internal: originalInternal,
-    })
+    });
 
-    const callbackMiddleware = callback()
-    const next = vi.fn()
+    const callbackMiddleware = callback();
+    const next = vi.fn();
 
-    await callbackMiddleware(mockContext, next)
+    await callbackMiddleware(mockContext, next);
 
     // Verify original internal is preserved, not hook's version
     expect(mockStateStore.set).toHaveBeenCalledWith(
@@ -397,44 +402,44 @@ describe('onCallback Hook', () => {
       }),
       false,
       mockContext
-    )
+    );
 
     // Explicitly verify hook's internal was rejected
-    const [, persistedData] = (mockStateStore.set as any).mock.calls[0]
-    expect(persistedData.internal.sid).not.toBe('hacker_session_id')
-  })
+    const [, persistedData] = (mockStateStore.set as any).mock.calls[0];
+    expect(persistedData.internal.sid).not.toBe('hacker_session_id');
+  });
 
   // REQ-B2: Handle case where stateStore.get returns null after login
   it('should handle gracefully when stateStore.get returns null after successful login', async () => {
-    const hookFn = vi.fn().mockResolvedValue(undefined)
-    mockConfig.onCallback = hookFn
+    const hookFn = vi.fn().mockResolvedValue(undefined);
+    mockConfig.onCallback = hookFn;
 
-    const mockStateStore = mockContext.get('__auth0_state_store')
-    mockStateStore.get.mockResolvedValue(null) // Race condition: state already deleted
+    const mockStateStore = mockContext.get('__auth0_state_store');
+    mockStateStore.get.mockResolvedValue(null); // Race condition: state already deleted
 
-    const callbackMiddleware = callback()
-    const next = vi.fn()
+    const callbackMiddleware = callback();
+    const next = vi.fn();
 
     // Should not throw even if state is null
-    const result = await callbackMiddleware(mockContext, next)
+    const result = await callbackMiddleware(mockContext, next);
 
     // Should still complete (either with redirect or response)
-    expect(result).toBeDefined()
-  })
+    expect(result).toBeDefined();
+  });
 
   it('should proceed without critical error when stateStore.get returns valid session', async () => {
-    const hookFn = vi.fn().mockResolvedValue(undefined)
-    mockConfig.onCallback = hookFn
+    const hookFn = vi.fn().mockResolvedValue(undefined);
+    mockConfig.onCallback = hookFn;
 
-    const mockStateStore = mockContext.get('__auth0_state_store')
-    mockStateStore.get.mockResolvedValue(mockSession) // Valid session returned
+    const mockStateStore = mockContext.get('__auth0_state_store');
+    mockStateStore.get.mockResolvedValue(mockSession); // Valid session returned
 
-    const callbackMiddleware = callback()
-    const next = vi.fn()
+    const callbackMiddleware = callback();
+    const next = vi.fn();
 
-    const result = await callbackMiddleware(mockContext, next)
+    const result = await callbackMiddleware(mockContext, next);
 
     // Should not throw or error out
-    expect(result).toBeDefined()
-  })
-})
+    expect(result).toBeDefined();
+  });
+});

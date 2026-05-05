@@ -1,19 +1,23 @@
-import { Context } from 'hono'
-import { z } from 'zod'
-import { SessionData, StateData, StateStore } from '@auth0/auth0-server-js'
-import { RESERVED_FIELDS, STATE_STORE_KEY } from '@/lib/constants.js'
-import { Auth0Session, Auth0User } from '@/types/auth0.js'
-import { MissingSessionError } from '@/errors/index.js'
-import { Auth0Error } from '@/errors/Auth0Error.js'
+import { Context } from 'hono';
+import { z } from 'zod';
+import { SessionData, StateData, StateStore } from '@auth0/auth0-server-js';
+import { RESERVED_FIELDS, STATE_STORE_KEY } from '@/lib/constants.js';
+import { Auth0Session, Auth0User } from '@/types/auth0.js';
+import { MissingSessionError } from '@/errors/index.js';
+import { Auth0Error } from '@/errors/Auth0Error.js';
 
-const StateDataSchema = z.object({
-  user: z.record(z.any()),
-  idToken: z.string(),
-  tokenSets: z.array(z.any()),
-  internal: z.object({
-    createdAt: z.number(),
-  }).passthrough(),
-}).passthrough()
+const StateDataSchema = z
+  .object({
+    user: z.record(z.any()),
+    idToken: z.string(),
+    tokenSets: z.array(z.any()),
+    internal: z
+      .object({
+        createdAt: z.number(),
+      })
+      .passthrough(),
+  })
+  .passthrough();
 
 /**
  * Validate StateData contains required fields.
@@ -24,14 +28,14 @@ const StateDataSchema = z.object({
  * @internal
  */
 function validateStateDataShape(data: unknown): asserts data is StateData {
-  const result = StateDataSchema.safeParse(data)
+  const result = StateDataSchema.safeParse(data);
   if (!result.success) {
-    const issue = result.error.errors[0]
-    const path = issue.path.join('.')
+    const issue = result.error.errors[0];
+    const path = issue.path.join('.');
     const message = path
       ? `Invalid session state: ${path} — ${issue.message}`
-      : `Invalid session state: ${issue.message}`
-    throw new Auth0Error(message, 500, 'state_validation_error')
+      : `Invalid session state: ${issue.message}`;
+    throw new Auth0Error(message, 500, 'state_validation_error');
   }
 }
 
@@ -45,9 +49,9 @@ function validateStateDataShape(data: unknown): asserts data is StateData {
  * @internal
  */
 function getStateStoreContext(c: Context, configuration: { session: { cookie?: { name?: string } } }) {
-  const stateStore = c.get(STATE_STORE_KEY) as StateStore<Context>
-  const identifier = configuration.session.cookie?.name ?? 'appSession'
-  return { stateStore, identifier }
+  const stateStore = c.get(STATE_STORE_KEY) as StateStore<Context>;
+  const identifier = configuration.session.cookie?.name ?? 'appSession';
+  return { stateStore, identifier };
 }
 
 /**
@@ -85,17 +89,17 @@ function getStateStoreContext(c: Context, configuration: { session: { cookie?: {
  */
 export function getUser(c: Context): Auth0User {
   // Read from c.var.auth0.user (populated by auth0() middleware)
-  const user = c.var.auth0?.user
+  const user = c.var.auth0?.user;
 
   // If no user, throw descriptive error
   if (!user) {
     throw new MissingSessionError(
       'getUser() called on an unauthenticated request. ' +
         'Add requiresAuth() before this handler or use c.var.auth0.user with a null check.'
-    )
+    );
   }
 
-  return user
+  return user;
 }
 
 /**
@@ -106,24 +110,19 @@ export function getUser(c: Context): Auth0User {
  * @throws If session missing `internal` field or StateStore not in context
  * @internal
  */
-export async function persistSession(
-  c: Context,
-  session: SessionData,
-): Promise<void> {
-  const config = c.var.auth0Configuration
+export async function persistSession(c: Context, session: SessionData): Promise<void> {
+  const config = c.var.auth0Configuration;
   if (!config) {
-    throw new Error(
-      'Auth0 configuration not found in context. Ensure auth0() middleware is registered.',
-    )
+    throw new Error('Auth0 configuration not found in context. Ensure auth0() middleware is registered.');
   }
-  const { stateStore, identifier } = getStateStoreContext(c, config)
+  const { stateStore, identifier } = getStateStoreContext(c, config);
 
   // SAFETY CHECK: Validate session has required internal field
   // (prevents regression of original critical bug)
   if (!session || typeof session !== 'object' || !('internal' in session)) {
     throw new Auth0Error(
       'persistSession: session must include "internal" field. ' +
-      'Use updateSession() or merge with stateStore.get() result instead.',
+        'Use updateSession() or merge with stateStore.get() result instead.',
       500,
       'session_validation_error'
     );
@@ -135,7 +134,7 @@ export async function persistSession(
     session as StateData, // session with internal field must be present
     false, // deleteSession flag (false = persist)
     c // context for cookie handler
-  )
+  );
 }
 
 /**
@@ -175,57 +174,54 @@ export async function persistSession(
  * @see getUser - Get user claims
  * @see RESERVED_FIELDS - Fields protected from overwrite
  */
-export async function updateSession(
-  c: Context,
-  data: Record<string, unknown>
-): Promise<void> {
+export async function updateSession(c: Context, data: Record<string, unknown>): Promise<void> {
   // Read raw StateData from stateStore (preserves `internal` field with createdAt/sid).
   // We cannot use getCachedSession/client.getSession here because server-js strips
   // `internal` from the returned SessionData, but stateStore.set() requires it
   // to calculate cookie maxAge from internal.createdAt.
-  const config = c.var.auth0Configuration
+  const config = c.var.auth0Configuration;
   if (!config) {
-    throw new Error(
-      'Auth0 configuration not found in context. Ensure auth0() middleware is registered.',
-    )
+    throw new Error('Auth0 configuration not found in context. Ensure auth0() middleware is registered.');
   }
-  const { stateStore, identifier } = getStateStoreContext(c, config)
-  const stateData = await stateStore.get(identifier, c) as StateData | null
+  const { stateStore, identifier } = getStateStoreContext(c, config);
+  const stateData = (await stateStore.get(identifier, c)) as StateData | null;
 
   if (!stateData) {
-    throw new MissingSessionError('updateSession() called without an active session.')
+    throw new MissingSessionError('updateSession() called without an active session.');
   }
 
   // Validate shape before proceeding
   validateStateDataShape(stateData);
 
   // Filter out reserved fields (prevent accidental overwrite)
-  const safeData = Object.fromEntries(
-    Object.entries(data).filter(([key]) => !RESERVED_FIELDS.has(key))
-  )
+  const safeData = Object.fromEntries(Object.entries(data).filter(([key]) => !RESERVED_FIELDS.has(key)));
 
   // Merge custom data onto raw StateData (preserves internal, user, tokens)
-  const updatedStateData = { ...stateData, ...safeData }
+  const updatedStateData = { ...stateData, ...safeData };
 
   // Persist to store (internal.createdAt is intact)
-  await stateStore.set(identifier, updatedStateData, false, c)
+  await stateStore.set(identifier, updatedStateData, false, c);
 
   // Build SessionData view (without internal) for cache and context
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { internal: _internal, ...updatedSession } = updatedStateData
+  const { internal: _internal, ...updatedSession } = updatedStateData;
 
   // Update request-scoped cache
-  c.set('__auth0_session_cache', updatedSession)
+  c.set('__auth0_session_cache', updatedSession);
 
   // Update c.var.auth0 context (so subsequent handlers see new data)
-  const updatedUser = updatedSession.user
-  const org = updatedUser?.org_id != null && updatedUser.org_id !== ''
-    ? { id: updatedUser.org_id as string, name: updatedUser.org_name as string | undefined }
-    : null
+  const updatedUser = updatedSession.user;
+  const org =
+    updatedUser?.org_id != null && updatedUser.org_id !== ''
+      ? {
+          id: updatedUser.org_id as string,
+          name: updatedUser.org_name as string | undefined,
+        }
+      : null;
 
   c.set('auth0', {
     user: (updatedUser as Auth0User) ?? null,
     session: updatedSession as Auth0Session,
     org,
-  })
+  });
 }

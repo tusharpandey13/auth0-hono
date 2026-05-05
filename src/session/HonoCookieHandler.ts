@@ -1,9 +1,9 @@
-import { CookieHandler, CookieSerializeOptions } from "@auth0/auth0-server-js";
-import { AsyncLocalStorage } from "async_hooks";
-import { Context } from "hono";
-import { getCookie, setCookie } from "hono/cookie";
-import { CookieOptions } from "hono/utils/cookie";
-import { Auth0Error } from "@/errors/Auth0Error.js";
+import { CookieHandler, CookieSerializeOptions } from '@auth0/auth0-server-js';
+import { AsyncLocalStorage } from 'async_hooks';
+import { Context } from 'hono';
+import { getCookie, setCookie } from 'hono/cookie';
+import { CookieOptions } from 'hono/utils/cookie';
+import { Auth0Error } from '@/errors/Auth0Error.js';
 
 function capitalize<T extends string>(s: T): Capitalize<T> {
   return (s.charAt(0).toUpperCase() + s.slice(1)) as Capitalize<T>;
@@ -25,9 +25,9 @@ export class HonoCookieHandler implements CookieHandler<any> {
     const ctx = storeOptions ?? HonoCookieHandler.localStore.getStore();
     if (!ctx) {
       throw new Auth0Error(
-        "No Hono Context available. Ensure auth0() middleware is registered.",
+        'No Hono Context available. Ensure auth0() middleware is registered.',
         500,
-        "missing_context"
+        'missing_context'
       );
     }
     return ctx;
@@ -46,9 +46,9 @@ export class HonoCookieHandler implements CookieHandler<any> {
   getCookies(storeOptions?: Context): Record<string, string> {
     const { req } = this.getContext(storeOptions);
     return Object.fromEntries(
-      (req.header("Cookie") ?? "").split(";").map((cookie) => {
-        const [key, ...val] = cookie.trim().split("=");
-        const encodedValue = val.join("=");
+      (req.header('Cookie') ?? '').split(';').map((cookie) => {
+        const [key, ...val] = cookie.trim().split('=');
+        const encodedValue = val.join('=');
         let decodedValue: string;
 
         try {
@@ -60,16 +60,11 @@ export class HonoCookieHandler implements CookieHandler<any> {
         }
 
         return [key, decodedValue];
-      }),
+      })
     );
   }
 
-  setCookie(
-    name: string,
-    value: string,
-    options?: CookieSerializeOptions,
-    storeOptions?: Context,
-  ): string {
+  setCookie(name: string, value: string, options?: CookieSerializeOptions, storeOptions?: Context): string {
     const cookieOptions: CookieOptions | undefined = options
       ? {
           ...options,
@@ -89,6 +84,6 @@ export class HonoCookieHandler implements CookieHandler<any> {
 
   deleteCookie(name: string, storeOptions?: Context): void {
     const ctx = this.getContext(storeOptions);
-    setCookie(ctx, name, "", { path: "/", maxAge: 0 });
+    setCookie(ctx, name, '', { path: '/', maxAge: 0 });
   }
 }

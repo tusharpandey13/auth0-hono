@@ -1,5 +1,5 @@
-import { HTTPException } from 'hono/http-exception'
-import { ContentfulStatusCode } from 'hono/utils/http-status'
+import { HTTPException } from 'hono/http-exception';
+import { ContentfulStatusCode } from 'hono/utils/http-status';
 
 /**
  * Base error class for Auth0 authentication errors.
@@ -25,13 +25,13 @@ export class Auth0Error extends HTTPException {
    * Machine-readable error code (e.g., 'invalid_grant').
    * Follows OAuth 2.0 error code naming convention.
    */
-  readonly code: string
+  readonly code: string;
 
   /**
    * User-visible error description.
    * Included in HTTP response body as `error_description` field.
    */
-  readonly description: string
+  readonly description: string;
 
   /**
    * Create a new Auth0Error.
@@ -48,34 +48,34 @@ export class Auth0Error extends HTTPException {
     status: ContentfulStatusCode,
     code: string,
     options?: {
-      cause?: unknown
-      description?: string
+      cause?: unknown;
+      description?: string;
     }
   ) {
     // Determine description: explicit override or fallback to message
-    const description = options?.description ?? message
+    const description = options?.description ?? message;
 
     // Create OAuth2-compliant JSON response body
     const responseBody = {
       error: code,
       error_description: description,
-    }
+    };
 
     // Create Hono Response with JSON content type
     const response = new Response(JSON.stringify(responseBody), {
       status,
       headers: { 'Content-Type': 'application/json' },
-    })
+    });
 
     // Call parent HTTPException constructor
     super(status, {
       message,
       res: response,
       cause: options?.cause,
-    })
+    });
 
     // Set instance properties for error handling
-    this.code = code
-    this.description = description
+    this.code = code;
+    this.description = description;
   }
 }

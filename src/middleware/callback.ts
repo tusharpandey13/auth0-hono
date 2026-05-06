@@ -104,7 +104,7 @@ export const callback = (params: CallbackParams = {}) => {
           // void/undefined: use default behavior
         } catch (hookErr) {
           // Hook threw — log but don't mask the login
-          console.error('onCallback hook error:', hookErr);
+          configuration.debug('onCallback hook error', { error: hookErr });
         }
       }
 

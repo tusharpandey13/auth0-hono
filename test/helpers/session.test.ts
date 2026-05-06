@@ -196,7 +196,7 @@ describe('persistSession', () => {
 
       // REQ-B1: persistSession must reject sessions without internal field
       // to prevent loss of critical internal state (sid, createdAt, etc)
-      expect(persistSession(mockContext, sessionWithoutInternal)).rejects.toThrow(
+      await expect(persistSession(mockContext, sessionWithoutInternal)).rejects.toThrow(
         'persistSession: session must include "internal" field'
       );
     });

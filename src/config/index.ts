@@ -7,18 +7,20 @@ import { Configuration, InitConfiguration } from './Configuration.js';
 import { ConfigurationSchema } from './Schema.js';
 import { assignFromEnv } from './envConfig.js';
 
-const parsedConfig = new Map<InitConfiguration, Configuration>();
+const parsedConfig = new Map<string, Configuration>();
 
 /**
  * Parse and validate configuration with caching.
- * Reuses parsed config object if input is the same reference.
+ * Uses JSON-serialized config as cache key to support both reference reuse
+ * (auth0() middleware) and value-equivalent objects (standalone ensureClient).
  */
 export const parseConfiguration = (config: InitConfiguration): Configuration => {
-  if (parsedConfig.has(config)) {
-    return parsedConfig.get(config)!;
+  const cacheKey = JSON.stringify(config);
+  if (parsedConfig.has(cacheKey)) {
+    return parsedConfig.get(cacheKey)!;
   }
   const result = ConfigurationSchema.parse(config) as Configuration;
-  parsedConfig.set(config, result);
+  parsedConfig.set(cacheKey, result);
   return result;
 };
 
